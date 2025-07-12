@@ -34,17 +34,19 @@ def detect_system(host: str) -> str:
         logging.warning(f"Failed to detect system on {host}: {e}")
     return 'unix'
 
-def extract_model_from_args(args: List[str]) -> Optional[str]:
-    """Extract model name from -m flag in arguments"""
-    for i, arg in enumerate(args):
-        if arg == '-m' and i + 1 < len(args):
-            return args[i + 1]
-    return None
 
-def extract_slot_save_path(args: List[str]) -> Optional[str]:
-    """Extract slot save path from --slot-save-path flag in arguments"""
+def extract_arg(args: List[str], flag: str) -> Optional[str]:
+    """Extract argument value following specified flag
+    
+    Args:
+        args: List of command line arguments
+        flag: The flag to look for (e.g. '-m' or '--port')
+    
+    Returns:
+        The extracted string value, or None if not found
+    """
     for i, arg in enumerate(args):
-        if arg == '--slot-save-path' and i + 1 < len(args):
+        if arg == flag and i + 1 < len(args):
             return args[i + 1]
     return None
 
@@ -174,8 +176,7 @@ def main() -> None:
     )
     
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
-    parser.add_argument('-h', '--host', required=True, help='SSH host')
-    parser.add_argument('-p', '--port', required=True, type=int, help='Forwarded port')
+    parser.add_argument('--host', required=True, help='SSH host')
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     parser.add_argument('args', nargs='*', help='Arguments to pass to llama-server')
     
@@ -186,12 +187,16 @@ def main() -> None:
         return
     
     host: str = args.host
-    forwarded_port: int = args.port
     server_args: List[str] = args.args
+    forwarded_port = extract_arg(server_args, '--port')
+    
+    if not forwarded_port:
+        logging.error("No --port argument found in llama-server arguments")
+        sys.exit(1)
     
     system: str = detect_system(host)
-    model: Optional[str] = extract_model_from_args(server_args)
-    slot_save_path: Optional[str] = extract_slot_save_path(server_args)
+    model = extract_arg(server_args, '-m')
+    slot_save_path = extract_arg(server_args, '--slot-save-path')
     
     running_port: Optional[str] = check_running_process(host, system, model)
     
