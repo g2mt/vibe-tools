@@ -209,9 +209,11 @@ def main() -> None:
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-t', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
+        ssh_cmd = ['ssh', '-T', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
         logging.info(f"Starting existing SSH tunnel with command: {ssh_cmd}")
-        process = subprocess.Popen(ssh_cmd)
+        process = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE)
+
+        create_socket_listener(process)
     else:
         logging.info("No existing server found, starting new instance")
         kill_existing_process(host, system)
