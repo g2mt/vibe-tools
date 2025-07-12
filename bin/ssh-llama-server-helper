@@ -180,14 +180,13 @@ def main() -> None:
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     parser.add_argument('args', nargs='*', help='Arguments to pass to llama-server')
     
-    args = parser.parse_args()
+    args, server_args = parser.parse_known_args()
     
     if args.kill:
         send_stop_signal()
         return
     
     host: str = args.host
-    server_args: List[str] = args.args
     forwarded_port = extract_arg(server_args, '--port')
     
     if not forwarded_port:
