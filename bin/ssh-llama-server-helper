@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from dataclasses import dataclass
 import argparse
 import logging
 import subprocess
@@ -13,6 +14,15 @@ import os
 import socket
 import errno
 from typing import List, Optional, Tuple
+
+@dataclass
+class ProgramData:
+    host: str
+    system: str
+    forwarded_port: str
+    model: Optional[str] = None
+    slot_save_path: Optional[str] = None
+    process: Optional[subprocess.Popen] = None
 
 SOCKET_PATH = os.path.expanduser("~/.ssh-llama-server-helper.socket")
 
@@ -89,9 +99,9 @@ def kill_existing_process(host: str, system: str) -> None:
     except Exception as e:
         logging.warning(f"Failed to kill process on {host}: {e}")
 
-def check_health(port: int, model: str, slot_save_path: Optional[str], host: str, system: str) -> None:
+def check_health(program_data: ProgramData) -> None:
     """Check server health and restore model if needed"""
-    health_url = f"http://localhost:{port}/health"
+    health_url = f"http://localhost:{program_data.forwarded_port}/health"
 
     while True:
         try:
@@ -102,24 +112,24 @@ def check_health(port: int, model: str, slot_save_path: Optional[str], host: str
             pass
         time.sleep(5)
 
-    if slot_save_path and model:
-        model_basename = os.path.basename(model)
+    if program_data.slot_save_path and program_data.model:
+        model_basename = os.path.basename(program_data.model)
         model_file = f"{model_basename}.bin"
 
-        if system == 'windows':
-            check_cmd = f"if exist \"{slot_save_path}\\{model_file}\" (echo exists)"
+        if program_data.system == 'windows':
+            check_cmd = f"if exist \"{program_data.slot_save_path}\\{model_file}\" (echo exists)"
         else:
-            check_cmd = f"test -f \"{slot_save_path}/{model_file}\" && echo exists"
+            check_cmd = f"test -f \"{program_data.slot_save_path}/{model_file}\" && echo exists"
 
         try:
-            result = run_ssh_command(host, check_cmd)
+            result = run_ssh_command(program_data.host, check_cmd)
             if 'exists' in result.stdout:
-                restore_url = f"http://localhost:{port}/slots/0?action=restore"
+                restore_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=restore"
                 requests.post(restore_url, json={"filename": model_file})
         except:
             pass
 
-def create_socket_listener(process: subprocess.Popen) -> None:
+def create_socket_listener(program_data: ProgramData) -> None:
     """Create a unix socket listener for stop commands"""
     try:
         os.unlink(SOCKET_PATH)
@@ -138,12 +148,16 @@ def create_socket_listener(process: subprocess.Popen) -> None:
                 data = connection.recv(1024).decode().strip()
                 if data == "stop":
                     logging.info("Socket received stop signal, terminating process")
-                    process.terminate()
-                    try:
-                        process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        process.kill()
+                    if program_data.process:
+                        program_data.process.terminate()
+                        try:
+                            program_data.process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            program_data.process.kill()
                     break
+                elif data == "get-host":
+                    logging.info("Socket received get-host request")
+                    connection.sendall(f"{program_data.host}\n".encode())
             finally:
                 connection.close()
         except Exception as e:
@@ -156,19 +170,34 @@ def create_socket_listener(process: subprocess.Popen) -> None:
     except OSError:
         pass
 
-def send_stop_signal() -> None:
-    """Send stop signal to running instance"""
+def send_socket_command(command: str) -> Optional[str]:
+    """Send command to running instance via socket
+    
+    Args:
+        command: The command to send ('stop' or 'get-host')
+    
+    Returns:
+        The response from socket if command was 'get-host', else None
+    """
     if not os.path.exists(SOCKET_PATH):
-        return
+        return None
 
     try:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(SOCKET_PATH)
-        sock.sendall(b"stop\n")
+        sock.sendall(f"{command}\n".encode())
+        
+        if command == "get-host":
+            response = sock.recv(1024).decode().strip()
+            sock.close()
+            return response
+        
         sock.close()
+        return None
     except socket.error as e:
         if e.errno != errno.ECONNREFUSED:
             raise
+        return None
 
 def main() -> None:
     logging.basicConfig(
@@ -179,41 +208,54 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('--host', help='SSH host')
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
+    parser.add_argument('--get-host', action='store_true', help='Get connected SSH host from running instance')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
 
     if args.kill:
         logging.info("Received kill command, sending stop signal")
-        send_stop_signal()
+        send_socket_command("stop")
         logging.info("Stop signal sent successfully")
         return
+    
+    if args.get_host:
+        logging.info("Requesting host from running instance")
+        host = send_socket_command("get-host")
+        if host:
+            print(host)
+            return
+        logging.error("No running instance found or failed to get host")
+        sys.exit(1)
 
     assert args.host is not None
     host: str = args.host
     logging.info(f"Starting helper for host: {host}")
 
     forwarded_port = extract_arg(server_args, '--port')
-
     if not forwarded_port:
         logging.error("No --port argument found in llama-server arguments")
         sys.exit(1)
 
-    logging.info(f"Forwarding port: {forwarded_port}")
-    system: str = detect_system(host)
-    logging.info(f"Detected system type: {system}")
-    model = extract_arg(server_args, '-m')
-    slot_save_path = extract_arg(server_args, '--slot-save-path')
+    program_data = ProgramData(
+        host=host,
+        system=detect_system(host),
+        forwarded_port=forwarded_port,
+        model=extract_arg(server_args, '-m'),
+        slot_save_path=extract_arg(server_args, '--slot-save-path')
+    )
 
-    running_port: Optional[str] = check_running_process(host, system, model)
+    logging.info(f"Forwarding port: {program_data.forwarded_port}")
+    logging.info(f"Detected system type: {program_data.system}")
+
+    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, program_data.model)
 
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
         ssh_cmd = ['ssh', '-T', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
         logging.info(f"Starting existing SSH tunnel with command: {ssh_cmd}")
-        process = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE)
-
-        create_socket_listener(process)
+        program_data.process = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE)
+        create_socket_listener(program_data)
     else:
         logging.info("No existing server found, starting new instance")
         kill_existing_process(host, system)
@@ -221,34 +263,35 @@ def main() -> None:
 
         ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
         logging.info(f"Starting new SSH tunnel with command: {ssh_cmd}")
-        process = subprocess.Popen(ssh_cmd)
+        program_data.process = subprocess.Popen(ssh_cmd)
 
-        if model and slot_save_path:
+        if program_data.model and program_data.slot_save_path:
             health_thread = threading.Thread(
                 target=check_health,
-                args=(forwarded_port, model, slot_save_path, host, system),
+                args=(program_data,),
                 daemon=True
             )
             health_thread.start()
 
         socket_thread = threading.Thread(
             target=create_socket_listener,
-            args=(process,),
+            args=(program_data,),
             daemon=True
         )
         socket_thread.start()
 
         try:
             logging.info("Waiting for SSH tunnel process to complete")
-            process.wait()
+            program_data.process.wait()
             logging.info("SSH tunnel process completed")
         except KeyboardInterrupt:
             logging.info("Received keyboard interrupt, terminating process")
-            process.terminate()
-            try:
-                process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                process.kill()
+            if program_data.process:
+                program_data.process.terminate()
+                try:
+                    program_data.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    program_data.process.kill()
         finally:
             logging.info("Cleaning up socket")
             send_stop_signal()
