@@ -158,6 +158,19 @@ def create_socket_listener(program_data: ProgramData) -> None:
                 elif data == "get-host":
                     logging.info("Socket received get-host request")
                     connection.sendall(f"{program_data.host}\n".encode())
+                elif data == "save":
+                    logging.info("Socket received save request")
+                    if program_data.model:
+                        model_basename = os.path.basename(program_data.model)
+                        model_file = f"{model_basename}.bin"
+                        save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
+                        try:
+                            response = requests.post(save_url, json={"filename": model_file})
+                            connection.sendall(response.text.encode())
+                        except Exception as e:
+                            connection.sendall(f"Error: {str(e)}\n".encode())
+                    else:
+                        connection.sendall("Error: No model specified\n".encode())
             finally:
                 connection.close()
         except Exception as e:
@@ -174,10 +187,10 @@ def send_socket_command(command: str) -> Optional[str]:
     """Send command to running instance via socket
     
     Args:
-        command: The command to send ('stop' or 'get-host')
+        command: The command to send ('stop', 'get-host', or 'save')
     
     Returns:
-        The response from socket if command was 'get-host', else None
+        The response from socket if command was 'get-host' or 'save', else None
     """
     if not os.path.exists(SOCKET_PATH):
         return None
@@ -209,6 +222,7 @@ def main() -> None:
     parser.add_argument('--host', help='SSH host')
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     parser.add_argument('--get-host', action='store_true', help='Get connected SSH host from running instance')
+    parser.add_argument('--save', action='store_true', help='Save current model state')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
@@ -226,6 +240,15 @@ def main() -> None:
             print(host)
             return
         logging.error("No running instance found or failed to get host")
+        sys.exit(1)
+    
+    if args.save:
+        logging.info("Sending save command to running instance")
+        response = send_socket_command("save")
+        if response:
+            print(response)
+            return
+        logging.error("No running instance found or failed to save")
         sys.exit(1)
 
     assert args.host is not None
