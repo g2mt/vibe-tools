@@ -178,34 +178,46 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('--host', required=True, help='SSH host')
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
-    parser.add_argument('args', nargs='*', help='Arguments to pass to llama-server')
+    # rest of the args (server_args) are parsed by parser.parse_known_args
     
     args, server_args = parser.parse_known_args()
+    print(server_args)
     
     if args.kill:
+        logging.info("Received kill command, sending stop signal")
         send_stop_signal()
+        logging.info("Stop signal sent successfully")
         return
     
     host: str = args.host
+    logging.info(f"Starting helper for host: {host}")
+    
     forwarded_port = extract_arg(server_args, '--port')
     
     if not forwarded_port:
         logging.error("No --port argument found in llama-server arguments")
         sys.exit(1)
     
+    logging.info(f"Forwarding port: {forwarded_port}")
     system: str = detect_system(host)
+    logging.info(f"Detected system type: {system}")
     model = extract_arg(server_args, '-m')
     slot_save_path = extract_arg(server_args, '--slot-save-path')
     
     running_port: Optional[str] = check_running_process(host, system, model)
     
     if running_port:
+        logging.info(f"Found existing server running on port {running_port}")
         ssh_cmd = ['ssh', '-t', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
+        logging.info(f"Starting existing SSH tunnel with command: {ssh_cmd}")
         process = subprocess.Popen(ssh_cmd)
     else:
+        logging.info("No existing server found, starting new instance")
         kill_existing_process(host, system)
+        logging.info("Killed any existing processes")
         
         ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
+        logging.info(f"Starting new SSH tunnel with command: {ssh_cmd}")
         process = subprocess.Popen(ssh_cmd)
         
         if model and slot_save_path:
@@ -224,8 +236,11 @@ def main() -> None:
         socket_thread.start()
         
         try:
+            logging.info("Waiting for SSH tunnel process to complete")
             process.wait()
+            logging.info("SSH tunnel process completed")
         except KeyboardInterrupt:
+            logging.info("Received keyboard interrupt, terminating process")
             process.terminate()
             try:
                 process.wait(timeout=5)
