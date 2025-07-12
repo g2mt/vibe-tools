@@ -137,6 +137,7 @@ def create_socket_listener(process: subprocess.Popen) -> None:
             try:
                 data = connection.recv(1024).decode().strip()
                 if data == "stop":
+                    logging.info("Socket received stop signal, terminating process")
                     process.terminate()
                     try:
                         process.wait(timeout=5)
@@ -247,6 +248,7 @@ def main() -> None:
             except subprocess.TimeoutExpired:
                 process.kill()
         finally:
+            logging.info("Cleaning up socket")
             send_stop_signal()
 
 if __name__ == '__main__':
