@@ -10,7 +10,11 @@ import threading
 import time
 import requests
 import os
+import socket
+import errno
 from typing import List, Optional, Tuple
+
+SOCKET_PATH = os.path.expanduser("~/.ssh-llama-server-helper.socket")
 
 def run_ssh_command(host: str, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
     """Run an SSH command with logging"""
@@ -46,7 +50,7 @@ def extract_slot_save_path(args: List[str]) -> Optional[str]:
 
 def check_running_process(host: str, system: str, model: Optional[str]) -> Optional[str]:
     """Check if llama-server is running with the specified model"""
-    if system == 'windows'*:
+    if system == 'windows':
         cmd = 'wmic process where "name like \'%llama-server.exe\'" get name,commandline /format:csv'
         try:
             result = run_ssh_command(host, cmd)
@@ -113,6 +117,56 @@ def check_health(port: int, model: str, slot_save_path: Optional[str], host: str
         except:
             pass
 
+def create_socket_listener(process: subprocess.Popen) -> None:
+    """Create a unix socket listener for stop commands"""
+    try:
+        os.unlink(SOCKET_PATH)
+    except OSError:
+        if os.path.exists(SOCKET_PATH):
+            raise
+    
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.bind(SOCKET_PATH)
+    sock.listen(1)
+    
+    while True:
+        try:
+            connection, _ = sock.accept()
+            try:
+                data = connection.recv(1024).decode().strip()
+                if data == "stop":
+                    process.terminate()
+                    try:
+                        process.wait(timeout=5)
+                    except subprocess.TimeoutExpired:
+                        process.kill()
+                    break
+            finally:
+                connection.close()
+        except Exception as e:
+            logging.error(f"Socket error: {e}")
+            break
+    
+    sock.close()
+    try:
+        os.unlink(SOCKET_PATH)
+    except OSError:
+        pass
+
+def send_stop_signal() -> None:
+    """Send stop signal to running instance"""
+    if not os.path.exists(SOCKET_PATH):
+        return
+    
+    try:
+        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        sock.connect(SOCKET_PATH)
+        sock.sendall(b"stop\n")
+        sock.close()
+    except socket.error as e:
+        if e.errno != errno.ECONNREFUSED:
+            raise
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
@@ -122,9 +176,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('-h', '--host', required=True, help='SSH host')
     parser.add_argument('-p', '--port', required=True, type=int, help='Forwarded port')
+    parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     parser.add_argument('args', nargs='*', help='Arguments to pass to llama-server')
     
     args = parser.parse_args()
+    
+    if args.kill:
+        send_stop_signal()
+        return
     
     host: str = args.host
     forwarded_port: int = args.port
@@ -137,13 +196,13 @@ def main() -> None:
     running_port: Optional[str] = check_running_process(host, system, model)
     
     if running_port:
-        ssh_cmd = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
-        subprocess.Popen(ssh_cmd)
+        ssh_cmd = ['ssh', '-t', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
+        process = subprocess.Popen(ssh_cmd)
     else:
         kill_existing_process(host, system)
         
         ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
-        subprocess.Popen(ssh_cmd)
+        process = subprocess.Popen(ssh_cmd)
         
         if model and slot_save_path:
             health_thread = threading.Thread(
@@ -152,6 +211,24 @@ def main() -> None:
                 daemon=True
             )
             health_thread.start()
+        
+        socket_thread = threading.Thread(
+            target=create_socket_listener,
+            args=(process,),
+            daemon=True
+        )
+        socket_thread.start()
+        
+        try:
+            process.wait()
+        except KeyboardInterrupt:
+            process.terminate()
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                process.kill()
+        finally:
+            send_stop_signal()
 
 if __name__ == '__main__':
     main()
