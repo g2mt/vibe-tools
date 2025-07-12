@@ -1,21 +1,33 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import subprocess
 import sys
 import re
 import shlex
+import threading
+import time
+import requests
+import os
 from typing import List, Optional, Tuple
+
+def run_ssh_command(host: str, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
+    """Run an SSH command with logging"""
+    logging.info(f"Running SSH command on {host}: {cmd}")
+    return subprocess.run(['ssh', host, cmd], 
+                        capture_output=True, 
+                        text=True, 
+                        timeout=timeout)
 
 def detect_system(host: str) -> str:
     """Detect if remote system is Windows or Unix-like"""
     try:
-        result = subprocess.run(['ssh', host, 'echo %OS%'], 
-                              capture_output=True, text=True, timeout=10)
+        result = run_ssh_command(host, 'echo %OS%')
         if 'Windows' in result.stdout:
             return 'windows'
-    except:
-        pass
+    except Exception as e:
+        logging.warning(f"Failed to detect system on {host}: {e}")
     return 'unix'
 
 def extract_model_from_args(args: List[str]) -> Optional[str]:
@@ -25,17 +37,21 @@ def extract_model_from_args(args: List[str]) -> Optional[str]:
             return args[i + 1]
     return None
 
+def extract_slot_save_path(args: List[str]) -> Optional[str]:
+    """Extract slot save path from --slot-save-path flag in arguments"""
+    for i, arg in enumerate(args):
+        if arg == '--slot-save-path' and i + 1 < len(args):
+            return args[i + 1]
+    return None
+
 def check_running_process(host: str, system: str, model: Optional[str]) -> Optional[str]:
     """Check if llama-server is running with the specified model"""
-    if system == 'windows':
-        # Use wmic to find processes ending with llama-server.exe
+    if system == 'windows'*:
         cmd = 'wmic process where "name like \'%llama-server.exe\'" get name,commandline /format:csv'
         try:
-            result = subprocess.run(['ssh', host, cmd], 
-                                  capture_output=True, text=True, timeout=10)
+            result = run_ssh_command(host, cmd)
             if 'llama-server.exe' in result.stdout:
                 if model and model in result.stdout:
-                    # Extract port from command line
                     port_match = re.search(r'--port\s+(\d+)', result.stdout)
                     return port_match.group(1) if port_match else None
         except:
@@ -46,12 +62,9 @@ def check_running_process(host: str, system: str, model: Optional[str]) -> Optio
             result = subprocess.run(['ssh', host, cmd], 
                                   capture_output=True, text=True, timeout=10)
             if result.returncode == 0:
-                # Get full command line for processes ending with llama-server
                 ps_cmd = "ps aux | grep 'llama-server$' | grep -v grep"
-                ps_result = subprocess.run(['ssh', host, ps_cmd], 
-                                         capture_output=True, text=True, timeout=10)
+                ps_result = run_ssh_command(host, ps_cmd)
                 if model and model in ps_result.stdout:
-                    # Extract port from command line
                     port_match = re.search(r'--port\s+(\d+)', ps_result.stdout)
                     return port_match.group(1) if port_match else None
         except:
@@ -66,11 +79,46 @@ def kill_existing_process(host: str, system: str) -> None:
         cmd = "pkill -f 'llama-server$'"
     
     try:
-        subprocess.run(['ssh', host, cmd], timeout=10)
-    except:
-        pass  # Ignore errors if process doesn't exist
+        run_ssh_command(host, cmd)
+    except Exception as e:
+        logging.warning(f"Failed to kill process on {host}: {e}")
+
+def check_health(port: int, model: str, slot_save_path: Optional[str], host: str, system: str) -> None:
+    """Check server health and restore model if needed"""
+    health_url = f"http://localhost:{port}/health"
+    
+    while True:
+        try:
+            response = requests.get(health_url, timeout=5)
+            if response.status_code == 200:
+                break
+        except:
+            pass
+        time.sleep(5)
+    
+    if slot_save_path and model:
+        model_basename = os.path.basename(model)
+        model_file = f"{model_basename}.bin"
+        
+        if system == 'windows':
+            check_cmd = f"if exist \"{slot_save_path}\\{model_file}\" (echo exists)"
+        else:
+            check_cmd = f"test -f \"{slot_save_path}/{model_file}\" && echo exists"
+        
+        try:
+            result = run_ssh_command(host, check_cmd)
+            if 'exists' in result.stdout:
+                restore_url = f"http://localhost:{port}/slots/0?action=restore"
+                requests.post(restore_url, json={"filename": model_file})
+        except:
+            pass
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('-h', '--host', required=True, help='SSH host')
     parser.add_argument('-p', '--port', required=True, type=int, help='Forwarded port')
@@ -82,27 +130,28 @@ def main() -> None:
     forwarded_port: int = args.port
     server_args: List[str] = args.args
     
-    # Detect system type
     system: str = detect_system(host)
-    
-    # Extract model from arguments
     model: Optional[str] = extract_model_from_args(server_args)
+    slot_save_path: Optional[str] = extract_slot_save_path(server_args)
     
-    # Check if llama-server is already running with the same model
     running_port: Optional[str] = check_running_process(host, system, model)
     
     if running_port:
-        # Case A: Process is running, just forward the port
-        sleep_cmd: str = 'timeout /t 999999' if system == 'windows' else 'sleep infinity'
-        ssh_cmd: List[str] = ['ssh', '-L', f'{running_port}:127.0.0.1:{forwarded_port}', host, sleep_cmd]
-        subprocess.run(ssh_cmd)
+        ssh_cmd = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
+        subprocess.Popen(ssh_cmd)
     else:
-        # Case B: Kill existing process and start new one
         kill_existing_process(host, system)
         
-        # Build SSH command with port forwarding and remote command
         ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
-        subprocess.run(ssh_cmd)
+        subprocess.Popen(ssh_cmd)
+        
+        if model and slot_save_path:
+            health_thread = threading.Thread(
+                target=check_health,
+                args=(forwarded_port, model, slot_save_path, host, system),
+                daemon=True
+            )
+            health_thread.start()
 
 if __name__ == '__main__':
     main()
