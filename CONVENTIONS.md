@@ -1,0 +1,2 @@
+- This is a repository of personal tools.
+- Store programs and one-off scripts in `bin/*` (with no extension)

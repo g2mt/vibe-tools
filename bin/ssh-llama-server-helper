@@ -1,0 +1,108 @@
+#!/usr/bin/env python3
+
+import argparse
+import subprocess
+import sys
+import re
+import shlex
+from typing import List, Optional, Tuple
+
+def detect_system(host: str) -> str:
+    """Detect if remote system is Windows or Unix-like"""
+    try:
+        result = subprocess.run(['ssh', host, 'echo %OS%'], 
+                              capture_output=True, text=True, timeout=10)
+        if 'Windows' in result.stdout:
+            return 'windows'
+    except:
+        pass
+    return 'unix'
+
+def extract_model_from_args(args: List[str]) -> Optional[str]:
+    """Extract model name from -m flag in arguments"""
+    for i, arg in enumerate(args):
+        if arg == '-m' and i + 1 < len(args):
+            return args[i + 1]
+    return None
+
+def check_running_process(host: str, system: str, model: Optional[str]) -> Optional[str]:
+    """Check if llama-server is running with the specified model"""
+    if system == 'windows':
+        # Use wmic to find processes ending with llama-server.exe
+        cmd = 'wmic process where "name like \'%llama-server.exe\'" get name,commandline /format:csv'
+        try:
+            result = subprocess.run(['ssh', host, cmd], 
+                                  capture_output=True, text=True, timeout=10)
+            if 'llama-server.exe' in result.stdout:
+                if model and model in result.stdout:
+                    # Extract port from command line
+                    port_match = re.search(r'--port\s+(\d+)', result.stdout)
+                    return port_match.group(1) if port_match else None
+        except:
+            pass
+    else:
+        cmd = "pgrep -f 'llama-server$'"
+        try:
+            result = subprocess.run(['ssh', host, cmd], 
+                                  capture_output=True, text=True, timeout=10)
+            if result.returncode == 0:
+                # Get full command line for processes ending with llama-server
+                ps_cmd = "ps aux | grep 'llama-server$' | grep -v grep"
+                ps_result = subprocess.run(['ssh', host, ps_cmd], 
+                                         capture_output=True, text=True, timeout=10)
+                if model and model in ps_result.stdout:
+                    # Extract port from command line
+                    port_match = re.search(r'--port\s+(\d+)', ps_result.stdout)
+                    return port_match.group(1) if port_match else None
+        except:
+            pass
+    return None
+
+def kill_existing_process(host: str, system: str) -> None:
+    """Kill existing llama-server process"""
+    if system == 'windows':
+        cmd = 'wmic process where "name like \'%llama-server.exe\'" delete'
+    else:
+        cmd = "pkill -f 'llama-server$'"
+    
+    try:
+        subprocess.run(['ssh', host, cmd], timeout=10)
+    except:
+        pass  # Ignore errors if process doesn't exist
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description='SSH llama-server helper')
+    parser.add_argument('-h', '--host', required=True, help='SSH host')
+    parser.add_argument('-p', '--port', required=True, type=int, help='Forwarded port')
+    parser.add_argument('args', nargs='*', help='Arguments to pass to llama-server')
+    
+    args = parser.parse_args()
+    
+    host: str = args.host
+    forwarded_port: int = args.port
+    server_args: List[str] = args.args
+    
+    # Detect system type
+    system: str = detect_system(host)
+    
+    # Extract model from arguments
+    model: Optional[str] = extract_model_from_args(server_args)
+    
+    # Check if llama-server is already running with the same model
+    running_port: Optional[str] = check_running_process(host, system, model)
+    
+    if running_port:
+        # Case A: Process is running, just forward the port
+        sleep_cmd: str = 'timeout /t 999999' if system == 'windows' else 'sleep infinity'
+        ssh_cmd: List[str] = ['ssh', '-L', f'{running_port}:127.0.0.1:{forwarded_port}', host, sleep_cmd]
+        subprocess.run(ssh_cmd)
+    else:
+        # Case B: Kill existing process and start new one
+        kill_existing_process(host, system)
+        
+        # Build SSH command with port forwarding and remote command
+        ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
+        subprocess.run(ssh_cmd)
+
+if __name__ == '__main__':
+    main()
