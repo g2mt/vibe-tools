@@ -177,12 +177,11 @@ def main() -> None:
     )
     
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
-    parser.add_argument('--host', required=True, help='SSH host')
+    parser.add_argument('--host', help='SSH host')
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     # rest of the args (server_args) are parsed by parser.parse_known_args
     
     args, server_args = parser.parse_known_args()
-    print(server_args)
     
     if args.kill:
         logging.info("Received kill command, sending stop signal")
@@ -190,6 +189,7 @@ def main() -> None:
         logging.info("Stop signal sent successfully")
         return
     
+    assert args.host is not None
     host: str = args.host
     logging.info(f"Starting helper for host: {host}")
     
