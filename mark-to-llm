@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+import sys
+import subprocess
+import argparse
+import os
+import textwrap
+import logging
+import re
+
+SYSTEM_PROMPT_SUFFIX = """\
+To suggest changes to a file you MUST return the entire content of the updated snippet.
+You MUST use this format:
+
+<snippet>
+```
+// entire snippet content ...
+// ... goes in between
+```
+</snippet>
+
+To suggest changes to this section of the file you MUST return a *code block*, enclosed in <snippet> tags, that contains the entire content of the modified snippet.
+*NEVER* skip, omit or elide content from a *code block* using "..." or by adding comments like "... rest of code..."!
+
+You will return only the modified code section, with no explanations.
+"""
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+def extract(content, open_tag, close_tag):
+    """Extracts and dedents content between specified tags."""
+    start_index = content.find(open_tag)
+    end_index = content.find(close_tag, start_index + len(open_tag))
+
+    if start_index == -1 or end_index == -1:
+        return None, None
+
+    return content[start_index + len(open_tag):end_index], (start_index, end_index)
+
+def get_indent(text) -> str:
+    """Finds the least indentation of a non-empty line in the given text. Returns a string for indentation (containing either spaces or tabs)."""
+    # Find the first line with content
+    first_line = None
+    for line in text.splitlines():
+        if line.strip():
+            first_line = line
+            break
+
+    if not first_line:
+        return ""  # No non-empty lines found
+
+    # Use regex to find the leading whitespace
+    match = re.match(r'^(\s*)', first_line)
+    if match:
+        return match.group(1)
+    else:
+        return "" # Should not happen if a non-empty line was found, but as a safeguard
+
+def indent_string(text, prefix):
+    """Indents each non-empty line of the text by the specified prefix."""
+    if not prefix:
+        return text
+    lines = text.splitlines()
+    indented_lines = []
+    for line in lines:
+        if line.strip():
+            indented_lines.append(prefix + line)
+        else:
+            indented_lines.append(line) # Preserve empty lines without indent
+    return "\n".join(indented_lines)
+
+def main():
+    logging.info("Starting the script.")
+
+    parser = argparse.ArgumentParser(
+        description="Extracts content from specified tags in a file, dedents it, "
+                    "prepends a prompt, and executes an LLM command via stdin. "
+                    "Supports adding reference files to the prompt. "
+                    "By default, modifies the file in place.",
+        formatter_class=lambda prog: argparse.HelpFormatter(prog, max_help_position=40, width=90)
+    )
+    parser.add_argument(
+        '-p', '--prompt', type=str, required=True,
+        help='The prompt string to prepend to the content extracted from the file.'
+    )
+    parser.add_argument(
+        '--tags', type=str, nargs=2, default=['<mark>', '</mark>'],
+        help='Specify the open and close tags for content extraction. '
+             'Defaults to "<mark>" and "</mark>". '
+             'Example: --tags "<code>" "</code>"'
+    )
+    parser.add_argument(
+        '--print', action='store_true',
+        help='Do not modify the file in place. Instead, print the LLM output to stdout.'
+    )
+    parser.add_argument(
+        '-r', '--reference', action='append', metavar='REFERENCE_FILE',
+        help='Add a reference file to the prompt. Can be specified multiple times.'
+    )
+
+    args, unknown_args = parser.parse_known_args()
+
+    if not unknown_args:
+        parser.error("File path and potentially LLM arguments are missing.")
+        sys.exit(1)
+
+    file_path = unknown_args[-1]
+    llm_extra_args = unknown_args[:-1]
+
+    prompt_text = args.prompt
+    open_tag, close_tag = args.tags
+    # Modify in place by default, unless --print is specified
+    modify_in_place = not args.print
+    reference_files = args.reference if args.reference else []
+
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+    except FileNotFoundError:
+        logging.error(f"File not found: {file_path}")
+        sys.exit(1)
+    except Exception as e:
+        logging.error(f"Error reading file {file_path}: {e}")
+        sys.exit(1)
+
+
+    marked_content_raw, indices = extract(content, open_tag, close_tag)
+
+    if marked_content_raw is None:
+        logging.error(f"'{open_tag}' or '{close_tag}' tags not found in the file.")
+        sys.exit(1)
+
+    # Determine the indentation for the LLM output
+    # We need the indentation of the content *within* the tags to correctly indent the output
+    indent_prefix = get_indent(marked_content_raw)
+    marked_content_dedented = textwrap.dedent(marked_content_raw)
+
+
+    if not marked_content_dedented.strip():
+        logging.error("Extracted marked section is empty or contains only whitespace after dedenting.")
+        sys.exit(1)
+
+    # Build LLM input with reference files
+    llm_input_parts = []
+
+    if reference_files:
+        llm_input_parts.append("## Reference files")
+        for ref_file_path in reference_files:
+            try:
+                with open(ref_file_path, 'r', encoding='utf-8') as rf:
+                    ref_content = rf.read()
+                llm_input_parts.append(f"{ref_file_path}")
+                llm_input_parts.append(f"```\n{ref_content}\n```")
+            except FileNotFoundError:
+                logging.warning(f"Reference file not found: {ref_file_path}. Skipping.")
+            except Exception as e:
+                logging.warning(f"Error reading reference file {ref_file_path}: {e}. Skipping.")
+        llm_input_parts.append("") # Add a blank line after reference files
+
+    llm_input_parts.append("## Input snippet")
+    llm_input_parts.append(file_path)
+    llm_input_parts.append("<snippet>")
+    llm_input_parts.append("```")
+    llm_input_parts.append(marked_content_dedented)
+    llm_input_parts.append("```")
+    llm_input_parts.append("</snippet>")
+    llm_input_parts.append("") # Add a blank line
+
+    llm_input_parts.append("## Prompt")
+    llm_input_parts.append(prompt_text)
+    llm_input_parts.append("")
+    llm_input_parts.append(SYSTEM_PROMPT_SUFFIX)
+
+    llm_input = "\n".join(llm_input_parts)
+
+    try:
+        if os.environ.get("MARK_TO_LLM_DEBUG") == "1":
+            result = marked_content_dedented
+        else:
+            # Construct the LLM command
+            llm_default_args = ["llm", "-x"]
+            llm_command = llm_default_args + llm_extra_args
+
+            logging.info(f"Executing LLM command: {' '.join(llm_command)}")
+            logging.info(f"Passing input via stdin:")
+            logging.info(llm_input)
+
+            # Execute the LLM command, passing the constructed input via stdin
+            result = subprocess.run(
+                llm_command,
+                check=True,
+                input=llm_input,
+                capture_output=True,
+                text=True,
+                encoding='utf-8'
+            ).stdout.strip()
+
+        logging.info(f"LLM command executed successfully.")
+
+        if modify_in_place:
+            # Replace the tagged content with the LLM's output, preserving indentation while stripping the tags
+            start_idx, end_idx = indices
+            # Indent the LLM's output with the same indentation as the original content within the tags
+            llm_output_indented = indent_string(result, indent_prefix)
+            # Construct the new content by replacing the old tagged section with the new indented output
+            # We add newlines around the LLM output to match the typical structure of code blocks
+            # NOTE to future LLMs: We purposefully strip the open/close tags from the input. DO NOT add it back!
+            new_content = content[:start_idx].rstrip() + llm_output_indented + "\n" + content[end_idx + len(close_tag):]
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(new_content)
+            logging.info(f"File '{file_path}' has been modified in place.")
+        else:
+            # Print the LLM's output to stdout if not modifying in place
+            print(result)
+
+    except FileNotFoundError:
+        logging.error("'llm' command not found. Make sure it's installed and in your PATH.")
+        sys.exit(1)
+    except subprocess.CalledProcessError as e:
+        logging.error(f"LLM command failed with exit code {e.returncode}.")
+        logging.error(f"LLM stderr:\n{e.stderr}")
+        sys.exit(e.returncode)
+    except Exception as e:
+        logging.error(f"An unexpected error occurred: {e}")
+        sys.exit(1)
+    finally:
+        logging.info("Script finished.")
+
+if __name__ == "__main__":
+    main()
+
