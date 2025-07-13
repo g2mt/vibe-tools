@@ -100,6 +100,43 @@ def kill_existing_process(host: str, system: str) -> None:
     except Exception as e:
         logging.warning(f"Failed to kill process on {host}: {e}")
 
+def save_model_cache(program_data: ProgramData) -> str:
+    """Save model cache to slot_save_path"""
+    if not (program_data.slot_save_path and program_data.model):
+        return "Error: No model or slot_save_path specified"
+    
+    model_basename = os.path.basename(program_data.model)
+    cache_file = f"{model_basename}.cache"
+    save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
+    try:
+        response = requests.post(save_url, json={"filename": cache_file})
+        return response.text
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+def restore_model_cache(program_data: ProgramData) -> str:
+    """Restore model cache from slot_save_path if available"""
+    if not (program_data.slot_save_path and program_data.model):
+        return "Error: No model or slot_save_path specified"
+
+    model_basename = os.path.basename(program_data.model)
+    cache_file = f"{model_basename}.cache"
+
+    if program_data.system == 'windows':
+        check_cmd = f"if exist \"{program_data.slot_save_path}/{cache_file}\" (echo exists)"
+    else:
+        check_cmd = f"test -f \"{program_data.slot_save_path}/{cache_file}\" && echo exists"
+
+    try:
+        result = run_ssh_command(program_data.host, check_cmd)
+        if 'exists' in result.stdout:
+            restore_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=restore"
+            requests.post(restore_url, json={"filename": cache_file})
+            return "Cache restored successfully"
+        return "No cache file found"
+    except Exception as e:
+        return f"Error: {str(e)}"
+
 def check_health(program_data: ProgramData) -> None:
     """Check server health and restore model if needed"""
     health_url = f"http://localhost:{program_data.forwarded_port}/health"
@@ -113,22 +150,7 @@ def check_health(program_data: ProgramData) -> None:
             pass
         time.sleep(5)
 
-    if program_data.slot_save_path and program_data.model:
-        model_basename = os.path.basename(program_data.model)
-        model_file = f"{model_basename}.bin"
-
-        if program_data.system == 'windows':
-            check_cmd = f"if exist \"{program_data.slot_save_path}\\{model_file}\" (echo exists)"
-        else:
-            check_cmd = f"test -f \"{program_data.slot_save_path}/{model_file}\" && echo exists"
-
-        try:
-            result = run_ssh_command(program_data.host, check_cmd)
-            if 'exists' in result.stdout:
-                restore_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=restore"
-                requests.post(restore_url, json={"filename": model_file})
-        except:
-            pass
+    restore_model_cache(program_data)
 
 def create_socket_listener(program_data: ProgramData) -> None:
     """Create a unix socket listener for stop commands"""
@@ -160,18 +182,13 @@ def create_socket_listener(program_data: ProgramData) -> None:
                     logging.info("Socket received get-host request")
                     connection.sendall(f"{program_data.host}\n".encode())
                 elif data == "save":
-                    logging.info("Socket received save request")
-                    if program_data.model:
-                        model_basename = os.path.basename(program_data.model)
-                        model_file = f"{model_basename}.bin"
-                        save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
-                        try:
-                            response = requests.post(save_url, json={"filename": model_file})
-                            connection.sendall(response.text.encode())
-                        except Exception as e:
-                            connection.sendall(f"Error: {str(e)}\n".encode())
-                    else:
-                        connection.sendall("Error: No model specified\n".encode())
+                    logging.info("Socket received save cache request")
+                    result = save_model_cache(program_data)
+                    connection.sendall(f"{result}\n".encode())
+                elif data == "load":
+                    logging.info("Socket received load cache request")
+                    result = restore_model_cache(program_data)
+                    connection.sendall(f"{result}\n".encode())
             finally:
                 connection.close()
         except Exception as e:
@@ -192,10 +209,10 @@ def send_socket_command(command: str) -> Optional[str]:
     """Send command to running instance via socket
     
     Args:
-        command: The command to send ('stop', 'get-host', or 'save')
+        command: The command to send ('stop', 'get-host', 'save', or 'load')
     
     Returns:
-        The response from socket if command was 'get-host' or 'save', else None
+        The response from socket if command was 'get-host', 'save' or 'load', else None
     """
     if not os.path.exists(SOCKET_PATH):
         return None
@@ -237,6 +254,7 @@ def main() -> None:
     parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
     parser.add_argument('--get-host', action='store_true', help='Get connected SSH host from running instance')
     parser.add_argument('--save', action='store_true', help='Save current model state')
+    parser.add_argument('--load', action='store_true', help='Load saved model state')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
@@ -263,6 +281,15 @@ def main() -> None:
             print(response)
             return
         logging.error("No running instance found or failed to save")
+        sys.exit(1)
+    
+    if args.load:
+        logging.info("Sending load command to running instance")
+        response = send_socket_command("load")
+        if response:
+            print(response)
+            return
+        logging.error("No running instance found or failed to load")
         sys.exit(1)
 
     assert args.host is not None
@@ -302,6 +329,7 @@ def main() -> None:
         ssh_cmd = ['ssh', '-T', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
         logging.info(f"Starting existing SSH tunnel with command: {ssh_cmd}")
         program_data.process = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE)
+
         create_socket_listener(program_data)
     else:
         logging.info("No existing server found, starting new instance")
