@@ -222,13 +222,18 @@ def send_socket_command(command: str) -> Optional[str]:
         sock.connect(SOCKET_PATH)
         sock.sendall(f"{command}\n".encode())
 
-        if command == "get-host":
-            response = sock.recv(1024).decode().strip()
-            sock.close()
-            return response
-
+        # Read response line by line
+        response = b''
+        while True:
+            chunk = sock.recv(1024)
+            if not chunk:
+                break
+            response += chunk
+            if b'\n' in chunk:  # Stop at first newline
+                break
+        response = response.decode().strip()
         sock.close()
-        return None
+        return response
     except socket.error as e:
         if e.errno != errno.ECONNREFUSED:
             raise
