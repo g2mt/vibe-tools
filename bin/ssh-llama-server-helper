@@ -13,6 +13,7 @@ import requests
 import os
 import socket
 import errno
+import atexit
 from typing import List, Optional, Tuple
 
 @dataclass
@@ -178,10 +179,14 @@ def create_socket_listener(program_data: ProgramData) -> None:
             break
 
     sock.close()
-    try:
-        os.unlink(SOCKET_PATH)
-    except OSError:
-        pass
+
+def wait_for_socket_cleanup(timeout: int = 10) -> None:
+    """Wait for existing socket file to be removed"""
+    start_time = time.time()
+    while os.path.exists(SOCKET_PATH):
+        if time.time() - start_time > timeout:
+            raise TimeoutError("Timeout waiting for socket cleanup")
+        time.sleep(0.1)
 
 def send_socket_command(command: str) -> Optional[str]:
     """Send command to running instance via socket
@@ -212,11 +217,20 @@ def send_socket_command(command: str) -> Optional[str]:
             raise
         return None
 
+def cleanup_socket() -> None:
+    """Cleanup socket file on exit"""
+    try:
+        if os.path.exists(SOCKET_PATH):
+            os.unlink(SOCKET_PATH)
+    except Exception as e:
+        logging.error(f"Error cleaning up socket: {e}")
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
+    atexit.register(cleanup_socket)
 
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('--host', help='SSH host')
@@ -254,6 +268,16 @@ def main() -> None:
     assert args.host is not None
     host: str = args.host
     logging.info(f"Starting helper for host: {host}")
+
+    # Check for existing socket and wait for cleanup
+    if os.path.exists(SOCKET_PATH):
+        logging.info("Existing socket found, sending stop signal")
+        send_socket_command("stop")
+        try:
+            wait_for_socket_cleanup()
+        except TimeoutError:
+            logging.error("Timeout waiting for socket cleanup")
+            sys.exit(1)
 
     forwarded_port = extract_arg(server_args, '--port')
     if not forwarded_port:
