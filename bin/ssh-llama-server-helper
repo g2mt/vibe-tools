@@ -104,7 +104,7 @@ def save_model_cache(program_data: ProgramData) -> str:
     """Save model cache to slot_save_path"""
     if not (program_data.slot_save_path and program_data.model):
         return "Error: No model or slot_save_path specified"
-    
+
     model_basename = os.path.basename(program_data.model)
     cache_file = f"{model_basename}.bin"
     save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
@@ -207,10 +207,10 @@ def wait_for_socket_cleanup(timeout: int = 60) -> None:
 
 def send_socket_command(command: str) -> Optional[str]:
     """Send command to running instance via socket
-    
+
     Args:
         command: The command to send ('stop', 'get-host', 'save', or 'load')
-    
+
     Returns:
         The response from socket if command was 'get-host', 'save' or 'load', else None
     """
@@ -221,12 +221,12 @@ def send_socket_command(command: str) -> Optional[str]:
         sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         sock.connect(SOCKET_PATH)
         sock.sendall(f"{command}\n".encode())
-        
+
         if command == "get-host":
             response = sock.recv(1024).decode().strip()
             sock.close()
             return response
-        
+
         sock.close()
         return None
     except socket.error as e:
@@ -264,7 +264,7 @@ def main() -> None:
         send_socket_command("stop")
         logging.info("Stop signal sent successfully")
         return
-    
+
     if args.get_host:
         logging.info("Requesting host from running instance")
         host = send_socket_command("get-host")
@@ -273,7 +273,7 @@ def main() -> None:
             return
         logging.error("No running instance found or failed to get host")
         sys.exit(1)
-    
+
     if args.save:
         logging.info("Sending save command to running instance")
         response = send_socket_command("save")
@@ -282,7 +282,7 @@ def main() -> None:
             return
         logging.error("No running instance found or failed to save")
         sys.exit(1)
-    
+
     if args.load:
         logging.info("Sending load command to running instance")
         response = send_socket_command("load")
