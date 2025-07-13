@@ -197,7 +197,7 @@ def create_socket_listener(program_data: ProgramData) -> None:
 
     sock.close()
 
-def wait_for_socket_cleanup(timeout: int = 10) -> None:
+def wait_for_socket_cleanup(timeout: int = 60) -> None:
     """Wait for existing socket file to be removed"""
     start_time = time.time()
     while os.path.exists(SOCKET_PATH):
