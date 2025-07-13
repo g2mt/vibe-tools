@@ -106,7 +106,7 @@ def save_model_cache(program_data: ProgramData) -> str:
         return "Error: No model or slot_save_path specified"
     
     model_basename = os.path.basename(program_data.model)
-    cache_file = f"{model_basename}.cache"
+    cache_file = f"{model_basename}.bin"
     save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
     try:
         response = requests.post(save_url, json={"filename": cache_file})
@@ -120,7 +120,7 @@ def restore_model_cache(program_data: ProgramData) -> str:
         return "Error: No model or slot_save_path specified"
 
     model_basename = os.path.basename(program_data.model)
-    cache_file = f"{model_basename}.cache"
+    cache_file = f"{model_basename}.bin"
 
     if program_data.system == 'windows':
         check_cmd = f"if exist \"{program_data.slot_save_path}/{cache_file}\" (echo exists)"
