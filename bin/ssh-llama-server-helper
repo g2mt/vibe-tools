@@ -305,7 +305,7 @@ def main() -> None:
         create_socket_listener(program_data)
     else:
         logging.info("No existing server found, starting new instance")
-        kill_existing_process(host, system)
+        kill_existing_process(host, program_data.system)
         logging.info("Killed any existing processes")
 
         ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
