@@ -197,12 +197,15 @@ def create_socket_listener(program_data: ProgramData) -> None:
 
     sock.close()
 
-def wait_for_socket_cleanup(timeout: int = 60) -> None:
+def wait_for_socket_cleanup(timeout: int = 10) -> None:
     """Wait for existing socket file to be removed"""
     start_time = time.time()
     while os.path.exists(SOCKET_PATH):
         if time.time() - start_time > timeout:
-            raise TimeoutError("Timeout waiting for socket cleanup")
+            logging.warning("Timeout waiting for socket cleanup, forcefully killing processes")
+            subprocess.run(['fuser', '-k', SOCKET_PATH], check=True)
+            os.unlink(SOCKET_PATH)
+            return
         time.sleep(0.1)
 
 def send_socket_command(command: str) -> Optional[str]:
@@ -306,8 +309,8 @@ def main() -> None:
         send_socket_command("stop")
         try:
             wait_for_socket_cleanup()
-        except TimeoutError:
-            logging.error("Timeout waiting for socket cleanup")
+        except:
+            logging.error("Error on socket cleanup")
             sys.exit(1)
 
     forwarded_port = extract_arg(server_args, '--port')
