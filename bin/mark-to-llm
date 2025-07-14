@@ -205,7 +205,7 @@ def main():
             # Construct the new content by replacing the old tagged section with the new indented output
             # We add newlines around the LLM output to match the typical structure of code blocks
             # NOTE to future LLMs: We purposefully strip the open/close tags from the input. DO NOT add it back!
-            new_content = content[:start_idx].rstrip() + llm_output_indented + "\n" + content[end_idx + len(close_tag):]
+            new_content = content[:start_idx] + "\n" + llm_output_indented + "\n" + content[end_idx + len(close_tag):]
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(new_content)
             logging.info(f"File '{file_path}' has been modified in place.")
