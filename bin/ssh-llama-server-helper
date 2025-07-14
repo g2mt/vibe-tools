@@ -307,11 +307,7 @@ def main() -> None:
     if os.path.exists(SOCKET_PATH):
         logging.info("Existing socket found, sending stop signal")
         send_socket_command("stop")
-        try:
-            wait_for_socket_cleanup()
-        except:
-            logging.error("Error on socket cleanup")
-            sys.exit(1)
+        wait_for_socket_cleanup()
 
     forwarded_port = extract_arg(server_args, '--port')
     if not forwarded_port:
