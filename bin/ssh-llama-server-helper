@@ -379,7 +379,7 @@ def main() -> None:
                     program_data.process.kill()
         finally:
             logging.info("Cleaning up socket")
-            send_stop_signal()
+            send_socket_command("stop")
 
 if __name__ == '__main__':
     main()
