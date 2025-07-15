@@ -372,36 +372,36 @@ def main() -> None:
     start_ssh_tunnel(program_data)
     create_socket_listener(program_data)
 
-        if program_data.model and program_data.slot_save_path:
-            health_thread = threading.Thread(
-                target=check_health,
-                args=(program_data,),
-                daemon=True
-            )
-            health_thread.start()
-
-        socket_thread = threading.Thread(
-            target=create_socket_listener,
+    if program_data.model and program_data.slot_save_path:
+        health_thread = threading.Thread(
+            target=check_health,
             args=(program_data,),
             daemon=True
         )
-        socket_thread.start()
+        health_thread.start()
 
-        try:
-            logging.info("Waiting for SSH tunnel process to complete")
-            program_data.process.wait()
-            logging.info("SSH tunnel process completed")
-        except KeyboardInterrupt:
-            logging.info("Received keyboard interrupt, terminating process")
-            if program_data.process:
-                program_data.process.terminate()
-                try:
-                    program_data.process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    program_data.process.kill()
-        finally:
-            logging.info("Cleaning up socket")
-            send_socket_command("stop")
+    socket_thread = threading.Thread(
+        target=create_socket_listener,
+        args=(program_data,),
+        daemon=True
+    )
+    socket_thread.start()
+
+    try:
+        logging.info("Waiting for SSH tunnel process to complete")
+        program_data.process.wait()
+        logging.info("SSH tunnel process completed")
+    except KeyboardInterrupt:
+        logging.info("Received keyboard interrupt, terminating process")
+        if program_data.process:
+            program_data.process.terminate()
+            try:
+                program_data.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                program_data.process.kill()
+    finally:
+        logging.info("Cleaning up socket")
+        send_socket_command("stop")
 
 if __name__ == '__main__':
     main()
