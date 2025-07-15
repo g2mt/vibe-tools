@@ -21,10 +21,10 @@ class ProgramData:
     host: str
     system: str
     forwarded_port: str
+    server_args: List[str]
     model: Optional[str] = None
     slot_save_path: Optional[str] = None
     process: Optional[subprocess.Popen] = None
-    server_args: List[str]
 
 SOCKET_PATH = os.path.expanduser("~/.ssh-llama-server-helper.socket")
 
