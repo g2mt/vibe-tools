@@ -197,7 +197,7 @@ def create_socket_listener(program_data: ProgramData) -> None:
                             program_data.process.wait(timeout=5)
                         except subprocess.TimeoutExpired:
                             program_data.process.kill()
-                    connection.sendall("ok\n".encode())
+
                     # Restart the SSH tunnel
                     if program_data.process:
                         program_data.process.terminate()
@@ -206,6 +206,8 @@ def create_socket_listener(program_data: ProgramData) -> None:
                         except subprocess.TimeoutExpired:
                             program_data.process.kill()
                     start_ssh_tunnel(program_data)
+
+                    connection.sendall("ok\n".encode())
             finally:
                 connection.close()
         except Exception as e:
