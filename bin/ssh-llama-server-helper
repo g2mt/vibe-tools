@@ -189,6 +189,23 @@ def create_socket_listener(program_data: ProgramData) -> None:
                     logging.info("Socket received load cache request")
                     result = restore_model_cache(program_data)
                     connection.sendall(f"{result}\n".encode())
+                elif data == "reconnect":
+                    logging.info("Socket received reconnect request")
+                    if program_data.process:
+                        program_data.process.terminate()
+                        try:
+                            program_data.process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            program_data.process.kill()
+                    connection.sendall("ok\n".encode())
+                    # Restart the SSH tunnel
+                    if program_data.process:
+                        program_data.process.terminate()
+                        try:
+                            program_data.process.wait(timeout=5)
+                        except subprocess.TimeoutExpired:
+                            program_data.process.kill()
+                    start_ssh_tunnel(program_data)
             finally:
                 connection.close()
         except Exception as e:
@@ -196,6 +213,22 @@ def create_socket_listener(program_data: ProgramData) -> None:
             break
 
     sock.close()
+
+def start_ssh_tunnel(program_data: ProgramData) -> None:
+    """Start the SSH tunnel process"""
+    running_port = check_running_process(program_data.host, program_data.system, program_data.model)
+    
+    if running_port:
+        logging.info(f"Found existing server running on port {running_port}")
+        ssh_cmd = ['ssh', '-T', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+    else:
+        logging.info("No existing server found, starting new instance")
+        kill_existing_process(program_data.host, program_data.system)
+        ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}', 
+                  program_data.host, *server_args]
+    
+    logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
+    program_data.process = subprocess.Popen(ssh_cmd)
 
 def wait_for_socket_cleanup(timeout: int = 10) -> None:
     """Wait for existing socket file to be removed"""
@@ -262,6 +295,7 @@ def main() -> None:
     parser.add_argument('--get-host', action='store_true', help='Get connected SSH host from running instance')
     parser.add_argument('--save', action='store_true', help='Save current model state')
     parser.add_argument('--load', action='store_true', help='Load saved model state')
+    parser.add_argument('--reconnect', action='store_true', help='Reconnect to running server')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
@@ -299,6 +333,15 @@ def main() -> None:
         logging.error("No running instance found or failed to load")
         sys.exit(1)
 
+    if args.reconnect:
+        logging.info("Sending reconnect command to running instance")
+        response = send_socket_command("reconnect")
+        if response:
+            print("Reconnected successfully")
+            return
+        logging.error("No running instance found or failed to reconnect")
+        sys.exit(1)
+
     assert args.host is not None
     host: str = args.host
     logging.info(f"Starting helper for host: {host}")
@@ -330,21 +373,8 @@ def main() -> None:
     # Register cleanup_socket here so that simple commands dont delete the socket
     atexit.register(cleanup_socket)
 
-    if running_port:
-        logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-T', '-L', f'{forwarded_port}:127.0.0.1:{running_port}', host]
-        logging.info(f"Starting existing SSH tunnel with command: {ssh_cmd}")
-        program_data.process = subprocess.Popen(ssh_cmd, stdin=subprocess.PIPE)
-
-        create_socket_listener(program_data)
-    else:
-        logging.info("No existing server found, starting new instance")
-        kill_existing_process(host, program_data.system)
-        logging.info("Killed any existing processes")
-
-        ssh_cmd: List[str] = ['ssh', '-L', f'{forwarded_port}:127.0.0.1:{forwarded_port}', host, *server_args]
-        logging.info(f"Starting new SSH tunnel with command: {ssh_cmd}")
-        program_data.process = subprocess.Popen(ssh_cmd)
+    start_ssh_tunnel(program_data)
+    create_socket_listener(program_data)
 
         if program_data.model and program_data.slot_save_path:
             health_thread = threading.Thread(
