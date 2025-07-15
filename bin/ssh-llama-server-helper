@@ -24,6 +24,7 @@ class ProgramData:
     model: Optional[str] = None
     slot_save_path: Optional[str] = None
     process: Optional[subprocess.Popen] = None
+    server_args: List[str] = []
 
 SOCKET_PATH = os.path.expanduser("~/.ssh-llama-server-helper.socket")
 
@@ -221,7 +222,7 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
         logging.info("No existing server found, starting new instance")
         kill_existing_process(program_data.host, program_data.system)
         ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}', 
-                  program_data.host, *server_args]
+                  program_data.host, *program_data.server_args]
     
     logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
     program_data.process = subprocess.Popen(ssh_cmd)
@@ -358,7 +359,8 @@ def main() -> None:
         system=detect_system(host),
         forwarded_port=forwarded_port,
         model=extract_arg(server_args, '-m'),
-        slot_save_path=extract_arg(server_args, '--slot-save-path')
+        slot_save_path=extract_arg(server_args, '--slot-save-path'),
+        server_args=server_args
     )
 
     logging.info(f"Forwarding port: {program_data.forwarded_port}")
