@@ -191,12 +191,6 @@ def create_socket_listener(program_data: ProgramData) -> None:
                     connection.sendall(f"{result}\n".encode())
                 elif data == "reconnect":
                     logging.info("Socket received reconnect request")
-                    if program_data.process:
-                        program_data.process.terminate()
-                        try:
-                            program_data.process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            program_data.process.kill()
 
                     # Restart the SSH tunnel
                     if program_data.process:
