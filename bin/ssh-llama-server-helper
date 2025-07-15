@@ -112,7 +112,7 @@ def save_model_cache(program_data: ProgramData) -> str:
         response = requests.post(save_url, json={"filename": cache_file})
         return response.text
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f'{{"error": "{str(e)}"}}'
 
 def restore_model_cache(program_data: ProgramData) -> str:
     """Restore model cache from slot_save_path if available"""
@@ -131,11 +131,11 @@ def restore_model_cache(program_data: ProgramData) -> str:
         result = run_ssh_command(program_data.host, check_cmd)
         if 'exists' in result.stdout:
             restore_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=restore"
-            requests.post(restore_url, json={"filename": cache_file})
-            return "Cache restored successfully"
-        return "No cache file found"
+            response = requests.post(restore_url, json={"filename": cache_file})
+            return response.text
+        return '{"error":"No cache file found"}'
     except Exception as e:
-        return f"Error: {str(e)}"
+        return f'{{"error": "{str(e)}"}}'
 
 def check_health(program_data: ProgramData) -> None:
     """Check server health and restore model if needed"""
