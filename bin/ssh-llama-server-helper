@@ -345,8 +345,25 @@ def main() -> None:
 
     # Check for existing socket and wait for cleanup
     if os.path.exists(SOCKET_PATH):
-        logging.info("Existing socket found, sending stop signal")
-        send_socket_command("stop")
+        logging.info("Existing socket found, checking if it's in use")
+        # Check if any process is using the socket
+        try:
+            result = subprocess.run(['lsof', SOCKET_PATH], 
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0 and result.stdout.strip():
+                logging.info("Socket is in use, sending stop signal")
+                send_socket_command("stop")
+            else:
+                logging.info("Socket file exists but no process is using it, removing")
+                os.unlink(SOCKET_PATH)
+        except (subprocess.TimeoutExpired, FileNotFoundError):
+            # lsof not available or timeout, just try to send stop signal
+            logging.info("lsof not available or timeout, sending stop signal")
+            send_socket_command("stop")
+        except Exception as e:
+            logging.warning(f"Error checking socket usage: {e}")
+            send_socket_command("stop")
+        
         wait_for_socket_cleanup()
 
     forwarded_port = extract_arg(server_args, '--port')
