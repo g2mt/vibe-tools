@@ -175,7 +175,8 @@ def create_socket_listener(program_data: ProgramData) -> None:
                 if data == "stop":
                     logging.info("Socket received stop signal, terminating process")
                     if program_data.process:
-                        program_data.process.terminate()
+                        if not cleanup_terminal(program_data):
+                            program_data.process.terminate()
                         try:
                             program_data.process.wait(timeout=5)
                         except subprocess.TimeoutExpired:
@@ -289,14 +290,16 @@ def cleanup_socket() -> None:
     except Exception as e:
         logging.error(f"Error cleaning up socket: {e}")
 
-def cleanup_terminal(program_data: ProgramData) -> None:
+def cleanup_terminal(program_data: ProgramData) -> bool:
     """Send exit command to terminal if using PTY"""
     try:
         if program_data.master is not None:
             os.write(program_data.master, b"exit\r\n")
             os.close(program_data.master)
+            return True
     except Exception as e:
         logging.error(f"Error cleaning up terminal: {e}")
+    return False
 
 def main() -> None:
     logging.basicConfig(
@@ -405,7 +408,6 @@ def main() -> None:
 
     # Register cleanup functions here so that simple commands dont delete the socket
     atexit.register(cleanup_socket)
-    atexit.register(cleanup_terminal, program_data)
 
     start_ssh_tunnel(program_data)
     create_socket_listener(program_data)
@@ -440,7 +442,6 @@ def main() -> None:
     finally:
         logging.info("Cleaning up")
         send_socket_command("stop")
-        cleanup_terminal(program_data)
 
 if __name__ == '__main__':
     main()
