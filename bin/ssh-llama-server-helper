@@ -218,15 +218,15 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-t', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+        ssh_cmd = ['ssh', '-tt', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
 
         logging.info(f"Starting SSH tunnel with PTY: {ssh_cmd}")
 
         # Use pty.spawn to properly handle terminal interaction
         master, slave = pty.openpty()
         program_data.process = subprocess.Popen(ssh_cmd, stdin=slave, stdout=slave, stderr=slave)
-        os.close(slave)  # Close slave end in parent process
-        os.close(master)  # We don't need to interact with the master end
+        # os.close(slave)  # Close slave end in parent process
+        # os.close(master)  # We don't need to interact with the master end
     else:
         logging.info("No existing server found, starting new instance")
         kill_existing_process(program_data.host, program_data.system)
