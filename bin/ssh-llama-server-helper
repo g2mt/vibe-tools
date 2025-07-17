@@ -14,6 +14,7 @@ import os
 import socket
 import errno
 import atexit
+import pty
 from typing import List, Optional, Tuple
 
 @dataclass
@@ -217,15 +218,23 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-T', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+        ssh_cmd = ['ssh', '-t', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+
+        logging.info(f"Starting SSH tunnel with PTY: {ssh_cmd}")
+
+        # Use pty.spawn to properly handle terminal interaction
+        master, slave = pty.openpty()
+        program_data.process = subprocess.Popen(ssh_cmd, stdin=slave, stdout=slave, stderr=slave)
+        os.close(slave)  # Close slave end in parent process
+        os.close(master)  # We don't need to interact with the master end
     else:
         logging.info("No existing server found, starting new instance")
         kill_existing_process(program_data.host, program_data.system)
         ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}', 
                   program_data.host, *program_data.server_args]
-    
-    logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
-    program_data.process = subprocess.Popen(ssh_cmd)
+
+        logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
+        program_data.process = subprocess.Popen(ssh_cmd)
 
 def wait_for_socket_cleanup(timeout: int = 10) -> None:
     """Wait for existing socket file to be removed"""
