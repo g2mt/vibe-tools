@@ -26,6 +26,7 @@ class ProgramData:
     model: Optional[str] = None
     slot_save_path: Optional[str] = None
     process: Optional[subprocess.Popen] = None
+    master: Optional[int] = None
 
 SOCKET_PATH = os.path.expanduser("~/.ssh-llama-server-helper.socket")
 
@@ -224,6 +225,7 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
 
         # Use pty.spawn to properly handle terminal interaction
         master, slave = pty.openpty()
+        program_data.master = master
         program_data.process = subprocess.Popen(ssh_cmd, stdin=slave, stdout=slave, stderr=slave)
     else:
         logging.info("No existing server found, starting new instance")
@@ -286,6 +288,15 @@ def cleanup_socket() -> None:
             os.unlink(SOCKET_PATH)
     except Exception as e:
         logging.error(f"Error cleaning up socket: {e}")
+
+def cleanup_terminal(program_data: ProgramData) -> None:
+    """Send exit command to terminal if using PTY"""
+    try:
+        if program_data.master is not None:
+            os.write(program_data.master, b"exit\r\n")
+            os.close(program_data.master)
+    except Exception as e:
+        logging.error(f"Error cleaning up terminal: {e}")
 
 def main() -> None:
     logging.basicConfig(
@@ -392,8 +403,9 @@ def main() -> None:
 
     running_port: Optional[str] = check_running_process(program_data.host, program_data.system, program_data.model)
 
-    # Register cleanup_socket here so that simple commands dont delete the socket
+    # Register cleanup functions here so that simple commands dont delete the socket
     atexit.register(cleanup_socket)
+    atexit.register(cleanup_terminal, program_data)
 
     start_ssh_tunnel(program_data)
     create_socket_listener(program_data)
@@ -426,8 +438,9 @@ def main() -> None:
             except subprocess.TimeoutExpired:
                 program_data.process.kill()
     finally:
-        logging.info("Cleaning up socket")
+        logging.info("Cleaning up")
         send_socket_command("stop")
+        cleanup_terminal(program_data)
 
 if __name__ == '__main__':
     main()
