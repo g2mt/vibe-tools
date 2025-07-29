@@ -8,6 +8,8 @@ import subprocess
 import sys
 import time
 import threading
+import termios
+import tty
 
 
 def main():
@@ -16,6 +18,16 @@ def main():
     parser.add_argument('ssh_args', nargs='+', help='SSH arguments')
 
     args = parser.parse_args()
+
+    # Save original terminal settings
+    original_stdin_attrs = termios.tcgetattr(sys.stdin.fileno())
+    
+    # Disable canonical mode and set VMIN=1, VTIME=0
+    tty.setraw(sys.stdin.fileno())
+    new_attrs = termios.tcgetattr(sys.stdin.fileno())
+    new_attrs[6][termios.VMIN] = 1
+    new_attrs[6][termios.VTIME] = 0
+    termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, new_attrs)
 
     # Create a PTY pair
     master_fd, slave_fd = pty.openpty()
@@ -74,7 +86,7 @@ def main():
                 try:
                     ready, _, _ = select.select([sys.stdin], [], [], 0.1)
                     if ready:
-                        data = sys.stdin.buffer.read(1024)
+                        data = sys.stdin.buffer.read(1)
                         if not data:
                             break
                         os.write(master_fd, data)
@@ -92,6 +104,12 @@ def main():
         if ssh_process.poll() is None:
             ssh_process.terminate()
     finally:
+        # Restore original terminal settings
+        try:
+            termios.tcsetattr(sys.stdin.fileno(), termios.TCSANOW, original_stdin_attrs)
+        except termios.error:
+            pass
+        
         # Clean up
         try:
             os.close(master_fd)
