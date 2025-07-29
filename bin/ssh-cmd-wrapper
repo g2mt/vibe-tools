@@ -1,78 +1,103 @@
 #!/usr/bin/env python3
 
-import pty
+import argparse
 import os
-import sys
-import time
+import pty
 import select
 import subprocess
-import argparse
+import sys
+import time
+import threading
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Wrapper for SSH command with PTY handling.")
-    parser.add_argument('--input', required=True, help='Input string to send to SSH stdin.')
-    parser.add_argument('ssh_args', nargs='+', help='Arguments for the SSH command.')
+    parser = argparse.ArgumentParser(description='SSH command wrapper with PTY')
+    parser.add_argument('--input', required=True, help='Input string to send to SSH')
+    parser.add_argument('ssh_args', nargs='+', help='SSH arguments')
 
     args = parser.parse_args()
 
-    input_string = args.input
-    ssh_args = args.ssh_args
-
-    # Spawn ssh with a temporary PTY
-    master, slave = pty.openpty()
-    ssh_process = subprocess.Popen(['ssh'] + ssh_args,
-                                   stdin=slave,
-                                   stdout=sys.stdout.fileno(),  # Redirect stdout to parent's stdout
-                                   stderr=sys.stderr.fileno(), # Redirect stderr to parent's stderr
-                                   close_fds=True)
-
-    # Close the slave end of the PTY in the parent process
-    os.close(slave)
-
-    # Insert input string into PTY's stdin
-    os.write(master, (input_string + '\n').encode())
-
-    # Wait for 3 seconds
-    time.sleep(3)
-
-    # Replace PTY's stdin with real stdin
-    # This is a bit tricky. We can't directly "replace" stdin of a running process.
-    # The common approach is to use select to multiplex between the PTY's master
-    # and the real stdin, and then write to the PTY's master.
-
-    # Set stdin to non-blocking for select
-    original_stdin_flags = os.fcntl(sys.stdin.fileno(), os.F_GETFL)
-    os.fcntl(sys.stdin.fileno(), os.F_SETFL, original_stdin_flags | os.O_NONBLOCK)
+    # Create a PTY pair
+    master_fd, slave_fd = pty.openpty()
 
     try:
-        while True:
-            rlist, _, _ = select.select([sys.stdin.fileno(), master], [], [])
+        # Spawn SSH process with the slave PTY as stdin/stdout/stderr
+        ssh_process = subprocess.Popen(
+            ['ssh'] + args.ssh_args,
+            stdin=slave_fd,
+            stdout=slave_fd,
+            stderr=slave_fd,
+            preexec_fn=os.setsid
+        )
 
-            if sys.stdin.fileno() in rlist:
-                data = os.read(sys.stdin.fileno(), 1024)
-                if not data:
-                    break  # EOF on stdin
-                os.write(master, data)
+        # Close slave fd in parent process
+        os.close(slave_fd)
 
-            if master in rlist:
-                data = os.read(master, 1024)
-                if not data:
-                    break  # EOF on PTY
-                sys.stdout.buffer.write(data)
-                sys.stdout.flush()
+        # Start a thread to wait for output then send input
+        def send_input_after_output():
+            # Wait for any output to be received first
+            try:
+                ready, _, _ = select.select([master_fd], [], [], 10)  # 10 second timeout
+                if ready:
+                    # Read and discard initial output (like prompts)
+                    os.read(master_fd, 1024)
 
-            # Check if ssh process has exited
-            if ssh_process.poll() is not None:
-                break
+                # Now send the input string
+                input_bytes = (args.input + '\r\n').encode('utf-8')
+                os.write(master_fd, input_bytes)
+            except OSError:
+                pass
 
-    finally:
-        # Restore original stdin flags
-        os.fcntl(sys.stdin.fileno(), os.F_SETFL, original_stdin_flags)
-        # Close the master end of the PTY
-        os.close(master)
-        # Wait for the ssh process to finish
+        input_thread = threading.Thread(target=send_input_after_output, daemon=True)
+        input_thread.start()
+
+        # Start a thread to copy PTY output to stdout
+        def copy_output():
+            while True:
+                try:
+                    ready, _, _ = select.select([master_fd], [], [], 0.1)
+                    if ready:
+                        data = os.read(master_fd, 1024)
+                        if not data:
+                            break
+                        sys.stdout.buffer.write(data)
+                        sys.stdout.buffer.flush()
+                except OSError:
+                    break
+
+        output_thread = threading.Thread(target=copy_output, daemon=True)
+        output_thread.start()
+
+        # Now pipe stdin to the PTY
+        def copy_stdin():
+            while True:
+                try:
+                    ready, _, _ = select.select([sys.stdin], [], [], 0.1)
+                    if ready:
+                        data = sys.stdin.buffer.read(1024)
+                        if not data:
+                            break
+                        os.write(master_fd, data)
+                except (OSError, KeyboardInterrupt):
+                    break
+
+        stdin_thread = threading.Thread(target=copy_stdin, daemon=True)
+        stdin_thread.start()
+
+        # Wait for SSH process to complete
         ssh_process.wait()
+
+    except KeyboardInterrupt:
+        # Handle Ctrl+C gracefully
+        if ssh_process.poll() is None:
+            ssh_process.terminate()
+    finally:
+        # Clean up
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+
 
 if __name__ == '__main__':
     main()
-
