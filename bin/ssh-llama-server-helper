@@ -229,7 +229,8 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
         program_data.process = subprocess.Popen(ssh_cmd, stdin=slave, stdout=slave, stderr=slave)
     else:
         logging.info("No existing server found, starting new instance")
-        kill_existing_process(program_data.host, program_data.system)
+        if not program_data.no_conflict:
+            kill_existing_process(program_data.host, program_data.system)
         ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}', 
                   program_data.host, *program_data.server_args]
 
@@ -445,12 +446,12 @@ def main() -> None:
 
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-    elif not getattr(program_data, 'no_conflict', False):
+    elif program_data.no_conflict:
+        logging.info("No-conflict mode enabled, will not kill existing instances")
+    else:
         # Only kill existing processes if not in no-conflict mode and no matching process found
         logging.info("No existing server found, checking for conflicting instances")
         kill_existing_process(program_data.host, program_data.system)
-    else:
-        logging.info("No-conflict mode enabled, will not kill existing instances")
 
     start_ssh_tunnel(program_data)
     create_socket_listener(program_data)
