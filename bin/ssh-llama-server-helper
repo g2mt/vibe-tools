@@ -23,12 +23,12 @@ class ProgramData:
     system: str
     forwarded_port: str
     server_args: List[str]
+    socket_path: str
     model: Optional[str] = None
     slot_save_path: Optional[str] = None
     process: Optional[subprocess.Popen] = None
     master: Optional[int] = None
     threads: List[threading.Thread] = None
-    socket_path: str
     no_conflict: bool = False
 
     def __post_init__(self):
