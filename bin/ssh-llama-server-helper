@@ -396,6 +396,22 @@ def main() -> None:
     host: str = args.host
     logging.info(f"Starting helper for host: {host}")
 
+    forwarded_port = extract_arg(server_args, '--port')
+    if not forwarded_port:
+        logging.error("No --port argument found in llama-server arguments")
+        sys.exit(1)
+
+    program_data = ProgramData(
+        host=host,
+        system=detect_system(host),
+        forwarded_port=forwarded_port,
+        model=extract_arg(server_args, '-m'),
+        slot_save_path=extract_arg(server_args, '--slot-save-path'),
+        server_args=server_args,
+        socket_path=args.socket_path,
+        no_conflict=args.no_conflict,
+    )
+
     # Check for existing socket and wait for cleanup
     if os.path.exists(program_data.socket_path):
         logging.info("Existing socket found, checking if it's in use")
@@ -418,22 +434,6 @@ def main() -> None:
             send_socket_command("stop", program_data.socket_path)
         
         wait_for_socket_cleanup(program_data)
-
-    forwarded_port = extract_arg(server_args, '--port')
-    if not forwarded_port:
-        logging.error("No --port argument found in llama-server arguments")
-        sys.exit(1)
-
-    program_data = ProgramData(
-        host=host,
-        system=detect_system(host),
-        forwarded_port=forwarded_port,
-        model=extract_arg(server_args, '-m'),
-        slot_save_path=extract_arg(server_args, '--slot-save-path'),
-        server_args=server_args,
-        socket_path=args.socket_path
-    )
-    program_data.no_conflict = args.no_conflict
 
     logging.info(f"Forwarding port: {program_data.forwarded_port}")
     logging.info(f"Detected system type: {program_data.system}")
