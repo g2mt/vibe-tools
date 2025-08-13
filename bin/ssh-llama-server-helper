@@ -29,6 +29,7 @@ class ProgramData:
     master: Optional[int] = None
     threads: List[threading.Thread] = None
     socket_path: str
+    no_conflict: bool = False
 
     def __post_init__(self):
         if self.threads is None:
@@ -343,6 +344,8 @@ def main() -> None:
     parser.add_argument('--reconnect', action='store_true', help='Reconnect to running server')
     parser.add_argument('--socket-path', default=os.path.expanduser("~/.ssh-llama-server-helper.socket"), 
                        help='Path to Unix socket for inter-process communication (default: ~/.ssh-llama-server-helper.socket)')
+    parser.add_argument('--no-conflict', action='store_true', 
+                       help='Do not kill existing llama-server instances when starting a new model')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
@@ -430,14 +433,24 @@ def main() -> None:
         server_args=server_args,
         socket_path=args.socket_path
     )
+    program_data.no_conflict = args.no_conflict
 
     logging.info(f"Forwarding port: {program_data.forwarded_port}")
     logging.info(f"Detected system type: {program_data.system}")
 
-    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, program_data.model)
-
     # Register cleanup functions here so that simple commands dont delete the socket
     atexit.register(cleanup_socket, program_data.socket_path)
+
+    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, program_data.model)
+
+    if running_port:
+        logging.info(f"Found existing server running on port {running_port}")
+    elif not getattr(program_data, 'no_conflict', False):
+        # Only kill existing processes if not in no-conflict mode and no matching process found
+        logging.info("No existing server found, checking for conflicting instances")
+        kill_existing_process(program_data.host, program_data.system)
+    else:
+        logging.info("No-conflict mode enabled, will not kill existing instances")
 
     start_ssh_tunnel(program_data)
     create_socket_listener(program_data)
