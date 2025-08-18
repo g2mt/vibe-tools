@@ -246,7 +246,7 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
             # On Windows, arguments with spaces need to be quoted.
             # We'll join all server args into a single string, enclosed in double quotes.
             # This assumes the llama-server executable can handle this format.
-            quoted_args = [f'"{arg}"' for arg in program_data.server_args]
+            quoted_args = [('"' + arg.replace('"', '\\"') + '"') for arg in program_data.server_args]
             server_args_str = " ".join(quoted_args)
         else:
             server_args_str = " ".join(program_data.server_args)
