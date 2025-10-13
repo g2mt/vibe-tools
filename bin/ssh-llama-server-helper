@@ -340,7 +340,7 @@ def cleanup_program_data(program_data: ProgramData) -> None:
             thread.join(timeout=1)
     
     # Clean up socket
-    cleanup_socket()
+    cleanup_socket(program_data.socket_path)
 
 def main() -> None:
     logging.basicConfig(
