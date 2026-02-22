@@ -232,7 +232,7 @@ def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-v', '-N', '-o', 'ServerAliveInterval=3600', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+        ssh_cmd = ['ssh', '-N', '-o', 'ServerAliveInterval=3600', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
 
         logging.info(f"Starting SSH tunnel: {ssh_cmd}")
         program_data.process = subprocess.Popen(ssh_cmd)
@@ -243,7 +243,7 @@ def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False
 
         server_args_str = " ".join(program_data.server_args)
 
-        ssh_cmd = ['ssh', '-v', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}',
+        ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}',
                   program_data.host, server_args_str]
 
         logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
@@ -488,8 +488,6 @@ def main() -> None:
                             program_data.process.wait(timeout=5)
                         except subprocess.TimeoutExpired:
                             program_data.process.kill()
-                    time.sleep(WAIT_SECS)
-                    start_ssh_tunnel(program_data)
             except Exception as e:
                 logging.warning(f"Health check error: {e}, restarting tunnel")
                 if program_data.process:
