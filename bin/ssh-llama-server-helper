@@ -224,9 +224,11 @@ def create_socket_listener(program_data: ProgramData) -> None:
 
     sock.close()
 
-def start_ssh_tunnel(program_data: ProgramData) -> None:
+def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False) -> bool:
     """Start the SSH tunnel process"""
     running_port = check_running_process(program_data.host, program_data.system, program_data.model)
+    if close_if_not_running and not running_port:
+        return False
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
@@ -246,6 +248,8 @@ def start_ssh_tunnel(program_data: ProgramData) -> None:
 
         logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
         program_data.process = subprocess.Popen(ssh_cmd)
+
+    return True
 
 def wait_for_socket_cleanup(program_data: ProgramData, timeout: int = 10) -> None:
     """Wait for existing socket file to be removed"""
@@ -485,7 +489,8 @@ def main() -> None:
             # Restart the SSH tunnel
             logging.info(f"Restarting SSH tunnel in {WAIT_SECS}...")
             time.sleep(WAIT_SECS)
-            start_ssh_tunnel(program_data)
+            if not start_ssh_tunnel(program_data, True):
+                break
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
