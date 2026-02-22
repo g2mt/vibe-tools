@@ -232,7 +232,7 @@ def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False
     
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-v', '-N', '-L', '-o', 'ServerAliveInterval=3600', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
+        ssh_cmd = ['ssh', '-v', '-N', '-o', 'ServerAliveInterval=3600', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
 
         logging.info(f"Starting SSH tunnel: {ssh_cmd}")
         program_data.process = subprocess.Popen(ssh_cmd)
