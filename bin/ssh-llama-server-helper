@@ -480,14 +480,6 @@ def main() -> None:
             time.sleep(60)  # Poll every 1 minute
             try:
                 response = requests.get(f"http://localhost:{program_data.forwarded_port}/health", timeout=5)
-                if response.status_code != 200:
-                    logging.warning(f"Health check failed with status {response.status_code}, restarting tunnel")
-                    if program_data.process:
-                        program_data.process.terminate()
-                        try:
-                            program_data.process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            program_data.process.kill()
             except Exception as e:
                 logging.warning(f"Health check error: {e}, restarting tunnel")
                 if program_data.process:
@@ -496,8 +488,6 @@ def main() -> None:
                         program_data.process.wait(timeout=5)
                     except subprocess.TimeoutExpired:
                         program_data.process.kill()
-                time.sleep(WAIT_SECS)
-                start_ssh_tunnel(program_data)
 
     monitor_thread = threading.Thread(
         target=monitor_tunnel,
