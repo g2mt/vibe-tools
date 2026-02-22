@@ -16,6 +16,8 @@ import errno
 import atexit
 from typing import List, Optional, Tuple
 
+WAIT_SECS = 3
+
 @dataclass
 class ProgramData:
     host: str
@@ -481,7 +483,8 @@ def main() -> None:
                 break
 
             # Restart the SSH tunnel
-            logging.info("Restarting SSH tunnel...")
+            logging.info(f"Restarting SSH tunnel in {WAIT_SECS}...")
+            time.sleep(WAIT_SECS)
             start_ssh_tunnel(program_data)
 
         except Exception as e:
