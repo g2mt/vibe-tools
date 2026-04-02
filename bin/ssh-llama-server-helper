@@ -477,9 +477,9 @@ def main() -> None:
     def monitor_tunnel(program_data: ProgramData) -> None:
         """Monitor SSH tunnel process and restart if it stops unexpectedly"""
         while not program_data.exit_requested:
-            time.sleep(60)  # Poll every 1 minute
+            time.sleep(60)
             try:
-                response = requests.get(f"http://localhost:{program_data.forwarded_port}/health", timeout=5)
+                response = requests.get(f"http://localhost:{program_data.forwarded_port}", timeout=5)
             except Exception as e:
                 logging.warning(f"Health check error: {e}, restarting tunnel")
                 if program_data.process:
@@ -489,13 +489,7 @@ def main() -> None:
                     except subprocess.TimeoutExpired:
                         program_data.process.kill()
 
-    monitor_thread = threading.Thread(
-        target=monitor_tunnel,
-        args=(program_data,),
-        daemon=True
-    )
-    monitor_thread.start()
-    program_data.threads.append(monitor_thread)
+    monitor_thread = None
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
     while not program_data.exit_requested:
@@ -514,6 +508,15 @@ def main() -> None:
             time.sleep(WAIT_SECS)
             if not start_ssh_tunnel(program_data, True):
                 break
+
+            if monitor_thread is None:
+                monitor_thread = threading.Thread(
+                    target=monitor_tunnel,
+                    args=(program_data,),
+                    daemon=True
+                )
+                monitor_thread.start()
+                program_data.threads.append(monitor_thread)
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
