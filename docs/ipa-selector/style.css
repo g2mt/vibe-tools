@@ -23,10 +23,20 @@ table {
         font-weight: bold;
         margin-bottom: 5px;
         text-transform: uppercase;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 }
 
 /* Layout Containers */
+.controls {
+    margin-bottom: 20px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
 .container {
     display: flex;
     flex-direction: column;
@@ -74,6 +84,12 @@ a.phoneme {
     display: inline-block;
     transition: transform 0.1s;
     cursor: pointer;
+    text-decoration: none;
+    color: inherit;
+
+    &.highlighted {
+        background-color: #ffff99;
+    }
 }
 
 .row-label {
