@@ -1,9 +1,9 @@
 /* Base Elements */
 body {
-    font-family: "Charis SIL", "DejaVu Serif", serif;
+    font-family: serif;
     background-color: #fff;
     color: #000;
-    padding: 20px;
+    padding: 10px 20px;
 }
 
 table {
@@ -31,10 +31,9 @@ table {
 
 /* Layout Containers */
 .controls {
-    margin-bottom: 20px;
-    display: flex;
-    gap: 10px;
-    align-items: center;
+    p {
+      margin: 10px 0;
+    }
 }
 
 .container {
