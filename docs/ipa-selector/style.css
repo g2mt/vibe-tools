@@ -77,3 +77,11 @@ caption {
     margin-bottom: 5px;
     text-transform: uppercase;
 }
+
+a.phoneme {
+    text-decoration: none;
+    color: inherit;
+    display: inline-block;
+    transition: transform 0.1s;
+    cursor: pointer;
+}
