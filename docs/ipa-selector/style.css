@@ -10,6 +10,10 @@ table {
     border-collapse: collapse;
     border: 1px solid black;
 
+    th {
+        font-weight: bold;
+    }
+
     th, td {
         border: 1px solid black;
         padding: 4px 8px;
@@ -22,10 +26,6 @@ table {
         text-align: left;
         font-weight: bold;
         margin-bottom: 5px;
-        text-transform: uppercase;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
     }
 }
 
@@ -55,13 +55,6 @@ table {
     width: 50%;
 }
 
-.pulmonic {
-    th {
-        font-weight: normal;
-        font-size: 0.9em;
-    }
-}
-
 .non-pulmonic {
     td {
         text-align: left;
@@ -85,7 +78,7 @@ a.phoneme {
     transition: transform 0.1s;
     cursor: pointer;
     text-decoration: none;
-    color: inherit;
+    color: blue;
 
     &.highlighted {
         background-color: #ffff99;
