@@ -26,12 +26,6 @@ table {
     }
 }
 
-a.phoneme {
-    display: inline-block;
-    transition: transform 0.1s;
-    cursor: pointer;
-}
-
 /* Layout Containers */
 .container {
     display: flex;
@@ -47,15 +41,15 @@ a.phoneme {
 }
 
 /* Table Specifics */
+.non-pulmonic, .vowels {
+    width: 50%;
+}
+
 .pulmonic {
     th {
         font-weight: normal;
         font-size: 0.9em;
     }
-}
-
-.non-pulmonic, .vowels {
-    width: 50%;
 }
 
 .non-pulmonic {
@@ -75,7 +69,13 @@ a.phoneme {
     }
 }
 
-/* Utility Classes */
+/* Phoneme utility Classes */
+a.phoneme {
+    display: inline-block;
+    transition: transform 0.1s;
+    cursor: pointer;
+}
+
 .row-label {
     text-align: left;
     font-weight: normal;
