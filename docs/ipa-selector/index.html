@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>IPA Selector</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Pulmonic Consonants -->
+        <table class="pulmonic">
+            <caption>CONSONANTS (PULMONIC)</caption>
+            <thead>
+                <tr>
+                    <th></th>
+                    <th>Bilabial</th>
+                    <th>Labiodental</th>
+                    <th>Dental</th>
+                    <th>Alveolar</th>
+                    <th>Postalveolar</th>
+                    <th>Retroflex</th>
+                    <th>Palatal</th>
+                    <th>Velar</th>
+                    <th>Uvular</th>
+                    <th>Pharyngeal</th>
+                    <th>Glottal</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="row-label">Plosive</td>
+                    <td><div class="ipa-pair"><span>p</span><span>b</span></div></td>
+                    <td class="impossible"></td>
+                    <td colspan="3"><div class="ipa-pair"><span>t</span><span>d</span></div></td>
+                    <td><div class="ipa-pair"><span>ʈ</span><span>ɖ</span></div></td>
+                    <td><div class="ipa-pair"><span>c</span><span>ɟ</span></div></td>
+                    <td><div class="ipa-pair"><span>k</span><span>ɡ</span></div></td>
+                    <td><div class="ipa-pair"><span>q</span><span>ɢ</span></div></td>
+                    <td class="impossible"></td>
+                    <td><span>ʔ</span></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Nasal</td>
+                    <td><span>m</span></td>
+                    <td><span>ɱ</span></td>
+                    <td colspan="3"><span>n</span></td>
+                    <td><span>ɳ</span></td>
+                    <td><span>ɲ</span></td>
+                    <td><span>ŋ</span></td>
+                    <td><span>ɴ</span></td>
+                    <td class="impossible"></td>
+                    <td class="impossible"></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Trill</td>
+                    <td><span>ʙ</span></td>
+                    <td></td>
+                    <td colspan="3"><span>r</span></td>
+                    <td></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                    <td><span>ʀ</span></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Tap or Flap</td>
+                    <td></td>
+                    <td><span>ⱱ</span></td>
+                    <td colspan="3"><span>ɾ</span></td>
+                    <td><span>ɽ</span></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                    <td></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Fricative</td>
+                    <td><div class="ipa-pair"><span>ɸ</span><span>β</span></div></td>
+                    <td><div class="ipa-pair"><span>f</span><span>v</span></div></td>
+                    <td><div class="ipa-pair"><span>θ</span><span>ð</span></div></td>
+                    <td><div class="ipa-pair"><span>s</span><span>z</span></div></td>
+                    <td><div class="ipa-pair"><span>ʃ</span><span>ʒ</span></div></td>
+                    <td><div class="ipa-pair"><span>ʂ</span><span>ʐ</span></div></td>
+                    <td><div class="ipa-pair"><span>ç</span><span>ʝ</span></div></td>
+                    <td><div class="ipa-pair"><span>x</span><span>ɣ</span></div></td>
+                    <td><div class="ipa-pair"><span>χ</span><span>ʁ</span></div></td>
+                    <td><div class="ipa-pair"><span>ħ</span><span>ʕ</span></div></td>
+                    <td><div class="ipa-pair"><span>h</span><span>ɦ</span></div></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Lateral fricative</td>
+                    <td class="impossible"></td>
+                    <td class="impossible"></td>
+                    <td colspan="3"><div class="ipa-pair"><span>ɬ</span><span>ɮ</span></div></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                    <td class="impossible"></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Approximant</td>
+                    <td></td>
+                    <td><span>ʋ</span></td>
+                    <td colspan="3"><span>ɹ</span></td>
+                    <td><span>ɻ</span></td>
+                    <td><span>j</span></td>
+                    <td><span>ɰ</span></td>
+                    <td></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                </tr>
+                <tr>
+                    <td class="row-label">Lateral approximant</td>
+                    <td class="impossible"></td>
+                    <td class="impossible"></td>
+                    <td colspan="3"><span>l</span></td>
+                    <td><span>ɭ</span></td>
+                    <td><span>ʎ</span></td>
+                    <td><span>ʟ</span></td>
+                    <td></td>
+                    <td class="impossible"></td>
+                    <td class="impossible"></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="bottom-row">
+            <!-- Non-Pulmonic Consonants -->
+            <table class="non-pulmonic">
+                <caption>CONSONANTS (NON-PULMONIC)</caption>
+                <thead>
+                    <tr>
+                        <th>Clicks</th>
+                        <th>Voiced implosives</th>
+                        <th>Ejectives</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>ʘ Bilabial</td>
+                        <td>ɓ Bilabial</td>
+                        <td>ʼ Examples:</td>
+                    </tr>
+                    <tr>
+                        <td>ǀ Dental</td>
+                        <td>ɗ Dental/alveolar</td>
+                        <td>pʼ Bilabial</td>
+                    </tr>
+                    <tr>
+                        <td>! (Post)alveolar</td>
+                        <td>ʄ Palatal</td>
+                        <td>tʼ Dental/alveolar</td>
+                    </tr>
+                    <tr>
+                        <td>ǂ Palatoalveolar</td>
+                        <td>ɠ Velar</td>
+                        <td>kʼ Velar</td>
+                    </tr>
+                    <tr>
+                        <td>ǁ Alveolar lateral</td>
+                        <td>ʛ Uvular</td>
+                        <td>sʼ Alveolar fricative</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <!-- Vowels -->
+            <table class="vowels">
+                <caption>VOWELS</caption>
+                <tr>
+                    <td>
+                        <pre style="font-family: inherit; line-height: 1.5;">
+Close         i • y       ɨ • ʉ       ɯ • u
+                \         /           |
+Close-mid        e • ø   ɘ • ɵ        ɤ • o
+                  \     /             |
+                    ə                 |
+Open-mid           ɛ • œ  ɜ • ɞ       ʌ • ɔ
+                    \   /             |
+                     æ  ɐ             |
+Open                  a • ɶ           ɑ • ɒ
+                        </pre>
+                    </td>
+                </tr>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
