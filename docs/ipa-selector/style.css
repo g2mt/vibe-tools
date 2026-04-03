@@ -15,6 +15,11 @@ body {
     display: flex;
     gap: 40px;
     align-items: flex-start;
+    width: 100%;
+}
+
+.non-pulmonic, .vowels {
+    width: 50%;
 }
 
 table {
