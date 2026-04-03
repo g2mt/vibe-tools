@@ -124,18 +124,32 @@ document.querySelectorAll('a.phoneme').forEach(anchor => {
                 anchor.style.transform = 'translateY(0)';
             }, 100);
         } else if (mode === 'play') {
-            const url = ...;
-            if (url) {
-                const audio = new Audio(url);
-                audio.play().catch(err => console.error("Playback failed:", err));
-                
-                // Visual feedback for playing
-                anchor.style.color = 'red';
-                setTimeout(() => {
-                    anchor.style.color = '';
-                }, 300);
+            const fileName = phonemeFile[text];
+            if (fileName) {
+                const wikiUrl = `https://commons.wikimedia.org/wiki/${fileName}`;
+                fetch(wikiUrl)
+                    .then(response => response.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const source = doc.querySelector("#file .audio.mw-tmh-player audio source");
+                        if (source) {
+                            const audioUrl = source.getAttribute("src");
+                            const audio = new Audio(audioUrl);
+                            audio.play().catch(err => console.error("Playback failed:", err));
+                            
+                            // Visual feedback for playing
+                            anchor.style.color = 'red';
+                            setTimeout(() => {
+                                anchor.style.color = '';
+                            }, 300);
+                        } else {
+                            console.warn(`Could not find audio source on page for: ${text}`);
+                        }
+                    })
+                    .catch(err => console.error("Fetch failed:", err));
             } else {
-                console.warn(`No audio found for phoneme: ${text}`);
+                console.warn(`No audio file mapping found for phoneme: ${text}`);
             }
         } else {
             anchor.classList.toggle('highlighted');
