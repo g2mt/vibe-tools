@@ -16,7 +16,7 @@ const phonemeFile = {
   "c": "File:Voiceless_palatal_plosive.ogg",
   "ɟ": "File:Voiced_palatal_plosive.ogg",
   "k": "File:Voiceless_velar_plosive.ogg",
-  "g": "File:Voiced_velar_plosive.ogg",
+  "ɡ": "File:Voiced_velar_plosive.ogg", // not ASCII g
   "q": "File:Voiceless_uvular_plosive.ogg",
   "ɢ": "File:Voiced_uvular_plosive.ogg",
   "ʔ": "File:Glottal_stop.ogg",
