@@ -126,28 +126,29 @@ document.querySelectorAll('a.phoneme').forEach(anchor => {
         } else if (mode === 'play') {
             const fileName = phonemeFile[text];
             if (fileName) {
-                const wikiUrl = `https://commons.wikimedia.org/wiki/${fileName}`;
-                fetch(wikiUrl)
-                    .then(response => response.text())
-                    .then(html => {
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(html, 'text/html');
-                        const source = doc.querySelector("#file .audio.mw-tmh-player audio source");
-                        if (source) {
-                            const audioUrl = source.getAttribute("src");
+                const title = fileName.replace('File:', '');
+                const apiUrl = `https://commons.wikimedia.org/w/api.php?action=query&titles=File:${encodeURIComponent(title)}&prop=imageinfo&iiprop=url&format=json&origin=*`;
+
+                fetch(apiUrl)
+                    .then(response => response.json())
+                    .then(data => {
+                        const pages = data.query.pages;
+                        const pageId = Object.keys(pages)[0];
+                        if (pageId !== "-1" && pages[pageId].imageinfo) {
+                            const audioUrl = pages[pageId].imageinfo[0].url;
                             const audio = new Audio(audioUrl);
                             audio.play().catch(err => console.error("Playback failed:", err));
-                            
+
                             // Visual feedback for playing
                             anchor.style.color = 'red';
                             setTimeout(() => {
                                 anchor.style.color = '';
                             }, 300);
                         } else {
-                            console.warn(`Could not find audio source on page for: ${text}`);
+                            console.warn(`Could not find audio URL via API for: ${text}`);
                         }
                     })
-                    .catch(err => console.error("Fetch failed:", err));
+                    .catch(err => console.error("API Fetch failed:", err));
             } else {
                 console.warn(`No audio file mapping found for phoneme: ${text}`);
             }
