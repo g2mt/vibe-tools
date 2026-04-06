@@ -71,6 +71,9 @@ function parse(input) {
 function nodeType(node) {
   if (node.isLeaf) return 'leaf';
   const cat = node.category;
+  if (cat === 'PP') return 'phrase';
+  if (cat === "P'") return 'bar';
+  if (cat === 'P') return 'head';
   if (cat.endsWith('P')) return 'phrase';
   if (cat.endsWith("'")) return 'bar';
   return 'head';
@@ -80,6 +83,7 @@ function nodeType(node) {
  * For a phrase XP, return the expected bar label X' and head label X.
  */
 function phraseLabels(category) {
+  if (category === 'PP') return { bar: "P'", head: "P" };
   const base = category.slice(0, -1); // remove trailing P
   return { bar: base + "'", head: base };
 }
@@ -195,6 +199,7 @@ function analyseNode(node) {
  * Given a bar category like "T'", return { head: "T", bar: "T'" }.
  */
 function barLabelsFromBar(category) {
+  if (category === "P'") return { head: "P", bar: "P'" };
   const base = category.slice(0, -1); // remove trailing '
   return { head: base, bar: category };
 }
