@@ -232,12 +232,21 @@ function extractComplementsAdjuncts(barNode) {
 /**
  * Walk the entire tree and collect analysis records for every non-leaf node.
  */
-function collectAll(node) {
+function collectAll(node, phraseOnly, hideWords) {
   const records = [];
   function walk(n) {
     if (n.isLeaf) return;
-    const rec = analyseNode(n);
-    if (rec) records.push(rec);
+    
+    const type = nodeType(n);
+    let skip = false;
+    if (phraseOnly && type !== 'phrase') skip = true;
+    if (hideWords && type === 'head') skip = true;
+
+    if (!skip) {
+      const rec = analyseNode(n);
+      if (rec) records.push(rec);
+    }
+    
     n.children.forEach(walk);
   }
   walk(node);
@@ -283,9 +292,12 @@ function renderError(msg) {
 
 document.getElementById('parse-btn').addEventListener('click', () => {
   const input = document.getElementById('tree-input').value;
+  const phraseOnly = document.getElementById('phrase-only-check').checked;
+  const hideWords = document.getElementById('hide-words-check').checked;
+  
   try {
     const tree = parse(input);
-    const records = collectAll(tree);
+    const records = collectAll(tree, phraseOnly, hideWords);
     renderRecords(records);
   } catch (e) {
     renderError(e.message);
