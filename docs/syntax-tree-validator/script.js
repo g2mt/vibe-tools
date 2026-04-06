@@ -234,6 +234,7 @@ function renderResults(root) {
       return tr;
     };
 
+    tbody.appendChild(makeRow('Type:', [{ label: node.label, isLeaf: true }]));
     tbody.appendChild(makeRow('Head:', head ? [head] : []));
     tbody.appendChild(makeRow('Specifier:', specifier ? [specifier] : []));
     tbody.appendChild(makeRow('Complements:', complements));
