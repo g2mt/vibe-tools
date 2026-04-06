@@ -344,7 +344,8 @@ function renderError(msg) {
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 document.getElementById('parse-btn').addEventListener('click', () => {
-  const input = document.getElementById('tree-input').value;
+  let input = document.getElementById('tree-input').value;
+  input = input.replaceAll("’", "'");
   const phraseOnly = document.getElementById('phrase-only-check').checked;
   const hideWords = document.getElementById('hide-words-check').checked;
   
