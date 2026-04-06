@@ -1,0 +1,117 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Georgia, serif;
+  background: #f4f4f4;
+  color: #222;
+  padding: 2rem;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+h1 {
+  margin-bottom: 1.5rem;
+  font-size: 1.8rem;
+}
+
+.input-area {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+label {
+  font-size: 1rem;
+}
+
+textarea {
+  width: 100%;
+  font-family: monospace;
+  font-size: 1rem;
+  padding: 0.5rem;
+  border: 1px solid #aaa;
+  border-radius: 4px;
+  resize: vertical;
+}
+
+button {
+  align-self: flex-start;
+  padding: 0.5rem 1.5rem;
+  font-size: 1rem;
+  background: #3a6ea5;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #2c5480;
+}
+
+.error {
+  color: red;
+  margin-bottom: 1rem;
+  font-family: monospace;
+}
+
+#results {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.constituent-card {
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.constituent-card table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.constituent-card table th,
+.constituent-card table td {
+  padding: 0.6rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  vertical-align: top;
+}
+
+.constituent-card table th {
+  background: #3a6ea5;
+  color: white;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.constituent-card table tr:last-child td {
+  border-bottom: none;
+}
+
+.constituent-card table td:first-child {
+  font-weight: bold;
+  width: 160px;
+  color: #444;
+}
+
+.bracket {
+  font-family: monospace;
+  background: #eef2f7;
+  border: 1px solid #c0cfe0;
+  border-radius: 3px;
+  padding: 0.1rem 0.3rem;
+  margin-right: 0.3rem;
+  display: inline-block;
+}

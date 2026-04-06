@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Syntax Tree Validator</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="container">
+    <h1>Syntax Tree Validator</h1>
+    <div class="input-area">
+      <label for="tree-input">Enter a bracketed X-bar syntax tree:</label>
+      <textarea id="tree-input" rows="4" placeholder="[TP [NP This] [T' [T pres] [VP [V is] [NP [Det a] [N' [N wug]]]]]]"></textarea>
+      <button id="parse-btn">Parse</button>
+    </div>
+    <div id="error-msg" class="error"></div>
+    <div id="results"></div>
+  </div>
+  <script src="script.js"></script>
+</body>
+</html>
