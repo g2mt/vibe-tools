@@ -92,13 +92,6 @@ function wordsOf(node) {
   return node.children.map(wordsOf).join(' ');
 }
 
-/**
- * Wrap words in a bracket span for display.
- */
-function bracket(node) {
-  return `<span class="bracket">[${wordsOf(node)}]</span>`;
-}
-
 // ── Analysis ─────────────────────────────────────────────────────────────────
 
 /**
@@ -112,11 +105,11 @@ function analyseNode(node) {
   const record = {
     constituent: wordsOf(node),
     type: node.category,
-    warning: '',
-    head: '--',
-    specifier: '--',
-    complements: '--',
-    adjuncts: '--',
+    warning: null,
+    head: null,
+    specifier: [],
+    complements: [],
+    adjuncts: [],
   };
 
   if (type === 'phrase') {
@@ -129,15 +122,15 @@ function analyseNode(node) {
       // Recurse into the bar level to find the head
       const barNode = barNodes[0];
       const headInfo = findHeadInBar(barNode);
-      record.head = headInfo ? bracket(headInfo) : '--';
+      record.head = headInfo ? wordsOf(headInfo) : null;
 
       if (specNodes.length > 0) {
-        record.specifier = specNodes.map(bracket).join(', ');
+        record.specifier = specNodes.map(wordsOf);
       }
 
       const { complements, adjuncts } = extractComplementsAdjuncts(barNode);
-      record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
-      record.adjuncts = adjuncts.length > 0 ? adjuncts.map(bracket).join(', ') : '--';
+      record.complements = complements.map(wordsOf);
+      record.adjuncts = adjuncts.map(wordsOf);
     } else {
       // No bar level (e.g. [DP [D a] [NP ...]])
       record.warning = `Missing bar level (${phraseLabels(node.category).bar})`;
@@ -146,16 +139,15 @@ function analyseNode(node) {
       const headNode = node.children.find(c => c.category === headLabel);
       if (headNode) {
         const word = headNode.children[0];
-        record.head = word ? bracket(word) : bracket(headNode);
+        record.head = word ? wordsOf(word) : wordsOf(headNode);
       }
       const complements = node.children.filter(c => c.category !== headLabel);
-      record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
+      record.complements = complements.map(wordsOf);
     }
 
   } else if (type === 'bar') {
     // X' → X (head) + complements  OR  X' + adjuncts
     const { head: headLabel, bar: barLabel } = barLabelsFromBar(node.category);
-    const headNodes = node.children.filter(c => c.category === headLabel || c.isLeaf);
     const barNodes = node.children.filter(c => c.category === barLabel);
     const otherNodes = node.children.filter(c =>
       c.category !== headLabel && !c.isLeaf && c.category !== barLabel
@@ -166,30 +158,30 @@ function analyseNode(node) {
     if (headNode) {
       // The head's child is the actual word
       const word = headNode.children[0];
-      record.head = word ? bracket(word) : bracket(headNode);
+      record.head = word ? wordsOf(word) : wordsOf(headNode);
     } else if (barNodes.length > 0) {
       // X' → X' + adjunct: head is inherited
       const innerHead = findHeadInBar(barNodes[0]);
-      record.head = innerHead ? bracket(innerHead) : '--';
+      record.head = innerHead ? wordsOf(innerHead) : null;
     }
 
     // complements vs adjuncts
     if (barNodes.length > 0) {
       // adjunction structure: X' → X' YP
-      record.adjuncts = otherNodes.map(bracket).join(', ') || '--';
+      record.adjuncts = otherNodes.map(wordsOf);
       // recurse for complements
       const { complements } = extractComplementsAdjuncts(barNodes[0]);
-      record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
+      record.complements = complements.map(wordsOf);
     } else {
       // base X': complements are non-head children
       const complements = node.children.filter(c => c.category !== headLabel);
-      record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
+      record.complements = complements.map(wordsOf);
     }
 
   } else if (type === 'head') {
     // Head node: its children are the actual words
     const words = node.children;
-    record.head = words.length > 0 ? words.map(bracket).join(' ') : bracket(node);
+    record.head = words.length > 0 ? words.map(wordsOf).join(' ') : wordsOf(node);
   }
 
   return record;
@@ -265,12 +257,21 @@ function collectAll(node, phraseOnly, hideWords) {
 
 // ── Rendering ────────────────────────────────────────────────────────────────
 
+function createBracketSpan(text) {
+  const span = document.createElement('span');
+  span.className = 'bracket';
+  span.textContent = `[${text}]`;
+  return span;
+}
+
 function renderRecords(records) {
   const output = document.getElementById('output-area');
   output.innerHTML = '';
 
   if (records.length === 0) {
-    output.innerHTML = '<p>No constituents found.</p>';
+    const p = document.createElement('p');
+    p.textContent = 'No constituents found.';
+    output.appendChild(p);
     return;
   }
 
@@ -278,25 +279,66 @@ function renderRecords(records) {
     const block = document.createElement('div');
     block.className = 'constituent-block';
 
-    block.innerHTML = `
-      <div class="constituent-title">Constituent: <span class="bracket">[${rec.constituent}]</span></div>
-      ${rec.warning ? `<div class="error">Warning: ${rec.warning}</div>` : ''}
-      <table>
-        <tr><th>Type</th><td>${rec.type}</td></tr>
-        <tr><th>Head</th><td>${rec.head}</td></tr>
-        <tr><th>Specifier</th><td>${rec.specifier}</td></tr>
-        <tr><th>Complements</th><td>${rec.complements}</td></tr>
-        <tr><th>Adjuncts</th><td>${rec.adjuncts}</td></tr>
-      </table>
-    `;
+    const title = document.createElement('div');
+    title.className = 'constituent-title';
+    title.textContent = 'Constituent: ';
+    title.appendChild(createBracketSpan(rec.constituent));
+    block.appendChild(title);
 
+    if (rec.warning) {
+      const warnDiv = document.createElement('div');
+      warnDiv.className = 'error';
+      warnDiv.textContent = `Warning: ${rec.warning}`;
+      block.appendChild(warnDiv);
+    }
+
+    const table = document.createElement('table');
+    const rows = [
+      ['Type', rec.type],
+      ['Head', rec.head],
+      ['Specifier', rec.specifier],
+      ['Complements', rec.complements],
+      ['Adjuncts', rec.adjuncts]
+    ];
+
+    rows.forEach(([label, value]) => {
+      const tr = document.createElement('tr');
+      const th = document.createElement('th');
+      th.textContent = label;
+      const td = document.createElement('td');
+
+      if (label === 'Type') {
+        td.textContent = value;
+      } else if (value === null || (Array.isArray(value) && value.length === 0)) {
+        td.textContent = '--';
+      } else if (Array.isArray(value)) {
+        value.forEach((item, idx) => {
+          td.appendChild(createBracketSpan(item));
+          if (idx < value.length - 1) {
+            td.appendChild(document.createTextNode(', '));
+          }
+        });
+      } else {
+        td.appendChild(createBracketSpan(value));
+      }
+
+      tr.appendChild(th);
+      tr.appendChild(td);
+      table.appendChild(tr);
+    });
+
+    block.appendChild(table);
     output.appendChild(block);
   });
 }
 
 function renderError(msg) {
   const output = document.getElementById('output-area');
-  output.innerHTML = `<p class="error">Parse error: ${msg}</p>`;
+  output.innerHTML = '';
+  const p = document.createElement('p');
+  p.className = 'error';
+  p.textContent = `Parse error: ${msg}`;
+  output.appendChild(p);
 }
 
 // ── Entry point ──────────────────────────────────────────────────────────────
