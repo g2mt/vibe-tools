@@ -4,8 +4,10 @@ Create the files index.html, script.js, style.css in this directory.
 It will have a textbox and parse bracketed X-bar syntax trees like this:
 
 ```
-[TP [NP This] [T' [T pres] [VP [V' [V is] [DP [D a] [NP [N' [N wug]]]]]]]]
+[TP [NP This] [T' [T pres] [VP [V' [V is] [DP [D' [D a] [NP [N' [N wug]]]]]]]]]
 ```
+
+Put the tree on top into the textarea as text.
 
 Add a "Parse" button to parse it.
 
