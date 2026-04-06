@@ -130,17 +130,26 @@ function analyseNode(node) {
       const barNode = barNodes[0];
       const headInfo = findHeadInBar(barNode);
       record.head = headInfo ? bracket(headInfo) : '--';
-    }
 
-    if (specNodes.length > 0) {
-      record.specifier = specNodes.map(bracket).join(', ');
-    }
+      if (specNodes.length > 0) {
+        record.specifier = specNodes.map(bracket).join(', ');
+      }
 
-    if (barNodes.length > 0) {
-      const barNode = barNodes[0];
       const { complements, adjuncts } = extractComplementsAdjuncts(barNode);
       record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
       record.adjuncts = adjuncts.length > 0 ? adjuncts.map(bracket).join(', ') : '--';
+    } else {
+      // No bar level (e.g. [DP [D a] [NP ...]])
+      record.warning = `Missing bar level (${phraseLabels(node.category).bar})`;
+      // Treat children as head + complements
+      const { head: headLabel } = phraseLabels(node.category);
+      const headNode = node.children.find(c => c.category === headLabel);
+      if (headNode) {
+        const word = headNode.children[0];
+        record.head = word ? bracket(word) : bracket(headNode);
+      }
+      const complements = node.children.filter(c => c.category !== headLabel);
+      record.complements = complements.length > 0 ? complements.map(bracket).join(', ') : '--';
     }
 
   } else if (type === 'bar') {
