@@ -105,7 +105,7 @@ function analyseNode(node) {
   const record = {
     constituent: wordsOf(node),
     type: node.category,
-    warning: null,
+    warning: [],
     head: null,
     specifier: [],
     complements: [],
@@ -133,7 +133,7 @@ function analyseNode(node) {
       record.adjuncts = adjuncts.map(wordsOf);
     } else {
       // No bar level (e.g. [DP [D a] [NP ...]])
-      record.warning = `Missing bar level (${phraseLabels(node.category).bar})`;
+      record.warning.push(`Missing bar level (${phraseLabels(node.category).bar})`);
       // Treat children as head + complements
       const { head: headLabel } = phraseLabels(node.category);
       const headNode = node.children.find(c => c.category === headLabel);
@@ -182,6 +182,10 @@ function analyseNode(node) {
     // Head node: its children are the actual words
     const words = node.children;
     record.head = words.length > 0 ? words.map(wordsOf).join(' ') : wordsOf(node);
+  }
+
+  if (record.head === null) {
+    record.warning.push('Missing head');
   }
 
   return record;
@@ -285,11 +289,13 @@ function renderRecords(records) {
     title.appendChild(createBracketSpan(rec.constituent));
     block.appendChild(title);
 
-    if (rec.warning) {
-      const warnDiv = document.createElement('div');
-      warnDiv.className = 'error';
-      warnDiv.textContent = `Warning: ${rec.warning}`;
-      block.appendChild(warnDiv);
+    if (rec.warning && rec.warning.length > 0) {
+      rec.warning.forEach(w => {
+        const warnDiv = document.createElement('div');
+        warnDiv.className = 'error';
+        warnDiv.textContent = `Warning: ${w}`;
+        block.appendChild(warnDiv);
+      });
     }
 
     const table = document.createElement('table');
