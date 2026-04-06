@@ -11,7 +11,13 @@ Add a "Parse" button to parse it.
 
 A word is a string of non-whitespace, non-bracket characters.
 
-A phrase has the category that ends with the character "P". You can find its bar level by replacing the final P with an apostrophe: `TP -> T'`. You can find its head by removing the final P.
+A phrase has the category that ends with the character "P". You can find its bar level by replacing the final P with an apostrophe: `TP -> T'`. You can find its head by removing the final P: `TP -> T`.
+
+Remember the schema:
+
+- X' = head X and complement phrases
+- X' = X' and adjunct phrases
+- XP = specifier and X'
 
 The validator then shows the constituents and their heads/specifiers/complements/adjuncts in this format. Wrap each constituent and subconstituent in brackets, and show the table (with 2 columns):
 
