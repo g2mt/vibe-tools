@@ -112,6 +112,7 @@ function analyseNode(node) {
   const record = {
     constituent: wordsOf(node),
     type: node.category,
+    warning: '',
     head: '--',
     specifier: '--',
     complements: '--',
@@ -270,6 +271,7 @@ function renderRecords(records) {
 
     block.innerHTML = `
       <div class="constituent-title">Constituent: <span class="bracket">[${rec.constituent}]</span></div>
+      ${rec.warning ? `<div class="error">Warning: ${rec.warning}</div>` : ''}
       <table>
         <tr><th>Type</th><td>${rec.type}</td></tr>
         <tr><th>Head</th><td>${rec.head}</td></tr>
