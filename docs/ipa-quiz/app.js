@@ -23,7 +23,7 @@
   const timerDisplay = document.getElementById('timer-display');
 
   // ── Load data ──────────────────────────────────────────────────────────────
-  fetch('data/open-dict-data/en_US_processed.json')
+  fetch('data/cmudict-ipa/en_US_processed.json')
     .then(res => {
       if (!res.ok) throw new Error('Failed to load dictionary.');
       return res.json();
