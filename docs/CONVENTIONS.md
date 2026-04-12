@@ -1,0 +1,2 @@
+- Use vanilla JS, CSS, HTML unless specified
+- Add a back link to the top of the page: `<p><a href="..">back</a></p>`
