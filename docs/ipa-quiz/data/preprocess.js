@@ -3,7 +3,7 @@ const data = JSON.parse(fs.readFileSync("./en_US.json", "utf8"));
 
 const vocab = data["en_US"][0];
 const chars = {};
-const exceptions = "/ˈ,ˌ";
+const exceptions = "/ˈ,";
 const newVocab = {};
 for (const word in vocab) {
   const ipa = vocab[word];
@@ -11,6 +11,8 @@ for (const word in vocab) {
   for (const ch of ipa) {
     if (exceptions.indexOf(ch) > -1)
       continue;
+    if (ch === " ")
+      break;
     if(typeof chars[ch] === "undefined")
       chars[ch] = 0;
     chars[ch] += 1;
