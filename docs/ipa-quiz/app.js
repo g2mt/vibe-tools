@@ -11,7 +11,6 @@
   let questionsCorrect = 0;
   let timerSeconds = 0;
   let timerInterval = null;
-  let quizStarted = false;
 
   // ── DOM refs ───────────────────────────────────────────────────────────────
   const loadingScreen = document.getElementById('loading-screen');
