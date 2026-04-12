@@ -262,3 +262,27 @@ td.manner {
 #vowel-table td {
   padding: 0.6rem 1rem;
 }
+
+/* ── Settings ── */
+.settings-wrapper {
+  margin-top: 1rem;
+  padding: 1rem;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  font-size: 0.95rem;
+  color: #444;
+}
+
+.settings-wrapper label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: help;
+}
+
+.settings-wrapper input[type="checkbox"] {
+  cursor: pointer;
+  width: 1.1rem;
+  height: 1.1rem;
+}

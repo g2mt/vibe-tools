@@ -18,6 +18,7 @@
   const wordDisplay = document.getElementById('word-display');
   const ipaInput = document.getElementById('ipa-input');
   const giveUpBtn = document.getElementById('give-up-btn');
+  const altSpellingChk = document.getElementById('alt-spelling-chk');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
 
@@ -100,9 +101,18 @@
     }, 600);
   }
 
+  // ── Normalization for alternative spellings ────────────────────────────────
+  function normalizeIpa(str) {
+    if (!altSpellingChk.checked) return str;
+    // Replace ɫ with l, and g (U+0067) with ɡ (U+0261)
+    return str.replace(/ɫ/g, 'l').replace(/g/g, 'ɡ');
+  }
+
   // ── Input event: validate on each keystroke ────────────────────────────────
   ipaInput.addEventListener('input', () => {
     const val = ipaInput.value;
+    const normVal = normalizeIpa(val);
+    const normCurrent = normalizeIpa(currentIpa);
 
     if (val === '') {
       ipaInput.classList.remove('error', 'success');
@@ -110,7 +120,7 @@
     }
 
     // Check if the current IPA starts with what the user has typed
-    if (!currentIpa.startsWith(val)) {
+    if (!normCurrent.startsWith(normVal)) {
       ipaInput.classList.add('error');
       ipaInput.classList.remove('success');
       firstAttempt = false;
@@ -118,8 +128,8 @@
       ipaInput.classList.remove('error');
     }
 
-    // Check for exact match
-    if (val === currentIpa) {
+    // Check for match
+    if (normVal === normCurrent) {
       handleCorrect();
     }
   });
