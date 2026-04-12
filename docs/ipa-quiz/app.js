@@ -17,6 +17,7 @@
   const app = document.getElementById('app');
   const wordDisplay = document.getElementById('word-display');
   const ipaInput = document.getElementById('ipa-input');
+  const giveUpBtn = document.getElementById('give-up-btn');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
 
@@ -121,6 +122,13 @@
     if (val === currentIpa) {
       handleCorrect();
     }
+  });
+
+  // ── Give up button ─────────────────────────────────────────────────────────
+  giveUpBtn.addEventListener('click', () => {
+    firstAttempt = false;
+    ipaInput.value = currentIpa;
+    ipaInput.dispatchEvent(new Event('input'));
   });
 
   // ── IPA button clicks ──────────────────────────────────────────────────────
