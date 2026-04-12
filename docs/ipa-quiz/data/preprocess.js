@@ -3,7 +3,7 @@ const data = JSON.parse(fs.readFileSync("./en_US.json", "utf8"));
 
 const vocab = data["en_US"][0];
 const chars = {};
-const exceptions = "/ˈ,";
+const exceptions = "/ˈˌ,";
 const newVocab = {};
 for (const word in vocab) {
   const ipa = vocab[word];
