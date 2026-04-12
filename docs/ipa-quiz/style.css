@@ -130,6 +130,8 @@ main {
   position: relative;
   width: 100%;
   max-width: 420px;
+  display: flex;
+  gap: 0.5rem;
 }
 
 #ipa-input {
@@ -156,6 +158,23 @@ main {
 #ipa-input.success {
   border-color: #27ae60;
   background: #eafaf1;
+}
+
+#give-up-btn {
+  padding: 0 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  background: #e74c3c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+#give-up-btn:hover {
+  background: #c0392b;
 }
 
 /* ── Flying +1 ── */
