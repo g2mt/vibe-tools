@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IPA Quiz</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Loading Screen -->
+  <div id="loading-screen">
+    <div class="loading-content">
+      <h2>Loading IPA Quiz…</h2>
+      <p>Fetching dictionary data…</p>
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- Main App -->
+  <div id="app" class="hidden">
+
+    <!-- Header -->
+    <header>
+      <a href="../" class="back-link">← Back</a>
+      <div class="stats">
+        <span id="score-display">0 / 0</span>
+        <span id="timer-display">00:00</span>
+      </div>
+    </header>
+
+    <!-- Quiz Area -->
+    <main>
+      <div id="word-display"></div>
+
+      <div class="input-wrapper">
+        <input type="text" id="ipa-input" placeholder="Type IPA here…" autocomplete="off" spellcheck="false" />
+        <div id="flying-plus" class="flying-plus hidden">+1</div>
+      </div>
+
+      <!-- Consonant Table -->
+      <div class="table-container">
+        <table id="consonant-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Bilabial</th>
+              <th>Labiodental</th>
+              <th>Dental</th>
+              <th>Alveolar</th>
+              <th>Postalveolar</th>
+              <th>Retroflex</th>
+              <th>Palatal</th>
+              <th>Velar</th>
+              <th>Glottal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Plosive -->
+            <tr>
+              <td class="manner">Plosive</td>
+              <td><a href="#" class="ipa-btn" data-ipa="p">p</a> <a href="#" class="ipa-btn" data-ipa="b">b</a></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="t">t</a> <a href="#" class="ipa-btn" data-ipa="d">d</a></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="k">k</a> <a href="#" class="ipa-btn" data-ipa="ɡ">ɡ</a></td>
+              <td></td>
+            </tr>
+            <!-- Nasal -->
+            <tr>
+              <td class="manner">Nasal</td>
+              <td><a href="#" class="ipa-btn" data-ipa="m">m</a></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="n">n</a></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="ŋ">ŋ</a></td>
+              <td></td>
+            </tr>
+            <!-- Fricative -->
+            <tr>
+              <td class="manner">Fricative</td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="f">f</a> <a href="#" class="ipa-btn" data-ipa="v">v</a></td>
+              <td><a href="#" class="ipa-btn" data-ipa="θ">θ</a> <a href="#" class="ipa-btn" data-ipa="ð">ð</a></td>
+              <td><a href="#" class="ipa-btn" data-ipa="s">s</a> <a href="#" class="ipa-btn" data-ipa="z">z</a></td>
+              <td><a href="#" class="ipa-btn" data-ipa="ʃ">ʃ</a> <a href="#" class="ipa-btn" data-ipa="ʒ">ʒ</a></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="h">h</a></td>
+            </tr>
+            <!-- Approximant -->
+            <tr>
+              <td class="manner">Approximant</td>
+              <td><a href="#" class="ipa-btn" data-ipa="w">w</a></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="ɹ">ɹ</a></td>
+              <td><a href="#" class="ipa-btn" data-ipa="j">j</a></td>
+              <td></td>
+              <td></td>
+            </tr>
+            <!-- Lateral Approximant -->
+            <tr>
+              <td class="manner">Lateral approximant</td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td><a href="#" class="ipa-btn" data-ipa="ɫ">ɫ</a></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+              <td></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Vowel Table -->
+      <div class="table-container">
+        <table id="vowel-table">
+          <thead>
+            <tr>
+              <th>Vowels</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <a href="#" class="ipa-btn" data-ipa="a">a</a>
+                <a href="#" class="ipa-btn" data-ipa="ɑ">ɑ</a>
+                <a href="#" class="ipa-btn" data-ipa="æ">æ</a>
+                <a href="#" class="ipa-btn" data-ipa="ə">ə</a>
+                <a href="#" class="ipa-btn" data-ipa="ɝ">ɝ</a>
+                <a href="#" class="ipa-btn" data-ipa="ɛ">ɛ</a>
+                <a href="#" class="ipa-btn" data-ipa="e">e</a>
+                <a href="#" class="ipa-btn" data-ipa="i">i</a>
+                <a href="#" class="ipa-btn" data-ipa="ɪ">ɪ</a>
+                <a href="#" class="ipa-btn" data-ipa="o">o</a>
+                <a href="#" class="ipa-btn" data-ipa="ɔ">ɔ</a>
+                <a href="#" class="ipa-btn" data-ipa="u">u</a>
+                <a href="#" class="ipa-btn" data-ipa="ʊ">ʊ</a>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

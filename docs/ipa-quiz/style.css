@@ -1,0 +1,245 @@
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #f4f6f9;
+  color: #222;
+  min-height: 100vh;
+}
+
+/* ── Loading Screen ── */
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  color: #fff;
+}
+
+.loading-content {
+  text-align: center;
+}
+
+.loading-content h2 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.loading-content p {
+  font-size: 1rem;
+  opacity: 0.7;
+  margin-bottom: 1.5rem;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 5px solid rgba(255,255,255,0.2);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Utilities ── */
+.hidden {
+  display: none !important;
+}
+
+/* ── App Layout ── */
+#app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ── Header ── */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1.5rem;
+  background: #1a1a2e;
+  color: #fff;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.back-link {
+  color: #a0c4ff;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.back-link:hover {
+  text-decoration: underline;
+}
+
+.stats {
+  display: flex;
+  gap: 1.5rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+#score-display {
+  color: #a0ffb0;
+}
+
+#timer-display {
+  color: #ffd6a0;
+  font-variant-numeric: tabular-nums;
+  font-family: monospace;
+  font-size: 1.1rem;
+}
+
+/* ── Main ── */
+main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 2rem 1rem 3rem;
+  gap: 1.5rem;
+}
+
+/* ── Word Display ── */
+#word-display {
+  font-size: 3rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: #1a1a2e;
+  min-height: 3.5rem;
+}
+
+/* ── Input ── */
+.input-wrapper {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+}
+
+#ipa-input {
+  width: 100%;
+  padding: 0.65rem 1rem;
+  font-size: 1.4rem;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+  font-family: inherit;
+  text-align: center;
+}
+
+#ipa-input:focus {
+  border-color: #4a90e2;
+}
+
+#ipa-input.error {
+  border-color: #e74c3c;
+  background: #fdecea;
+}
+
+#ipa-input.success {
+  border-color: #27ae60;
+  background: #eafaf1;
+}
+
+/* ── Flying +1 ── */
+.flying-plus {
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #27ae60;
+  pointer-events: none;
+  animation: flyUp 0.9s ease-out forwards;
+}
+
+@keyframes flyUp {
+  0%   { opacity: 1; transform: translateX(-50%) translateY(0); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-60px); }
+}
+
+/* ── Tables ── */
+.table-container {
+  width: 100%;
+  max-width: 900px;
+  overflow-x: auto;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  font-size: 0.9rem;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 0.45rem 0.6rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+thead th {
+  background: #1a1a2e;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.82rem;
+}
+
+td.manner {
+  text-align: left;
+  font-style: italic;
+  font-size: 0.82rem;
+  color: #555;
+  white-space: nowrap;
+  background: #f0f0f5;
+}
+
+/* ── IPA Buttons ── */
+.ipa-btn {
+  display: inline-block;
+  padding: 0.2rem 0.35rem;
+  margin: 0.1rem;
+  font-size: 1.15rem;
+  color: #1a1a2e;
+  text-decoration: none;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+  cursor: pointer;
+  font-family: 'Noto Sans', 'DejaVu Sans', serif;
+}
+
+.ipa-btn:hover {
+  background: #1a1a2e;
+  color: #fff;
+}
+
+/* ── Vowel table single-row ── */
+#vowel-table thead th {
+  font-size: 0.9rem;
+}
+
+#vowel-table td {
+  padding: 0.6rem 1rem;
+}
