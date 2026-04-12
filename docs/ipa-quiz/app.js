@@ -19,11 +19,22 @@
   const ipaInput = document.getElementById('ipa-input');
   const giveUpBtn = document.getElementById('give-up-btn');
   const altSpellingChk = document.getElementById('alt-spelling-chk');
+  const dictInfo = document.getElementById('dict-info');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
 
   // ── Load data ──────────────────────────────────────────────────────────────
-  fetch('data/cmudict-ipa/en_US_processed.json')
+  const urlParams = new URLSearchParams(window.location.search);
+  const dictKey = urlParams.get('dict');
+  let dictPath = 'data/cmudict-ipa/en_US_processed.json';
+  let dictName = 'cmudict-ipa';
+
+  if (dictKey === 'open-dict-data') {
+    dictPath = 'data/open-dict-data/en_US_processed.json';
+    dictName = 'open-dict-data';
+  }
+
+  fetch(dictPath)
     .then(res => {
       if (!res.ok) throw new Error('Failed to load dictionary.');
       return res.json();
@@ -31,6 +42,7 @@
     .then(data => {
       wordIpaMap = data;
       wordList = Object.keys(data);
+      dictInfo.textContent = `Loaded dictionary: ${dictName}`;
       loadingScreen.classList.add('hidden');
       app.classList.remove('hidden');
       nextWord();
