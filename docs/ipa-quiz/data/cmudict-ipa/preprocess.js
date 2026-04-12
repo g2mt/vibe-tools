@@ -23,6 +23,7 @@ for (let line of data.split("\n")) {
     chars[ch] += 1;
     newIpa += ch;
   }
+  newIpa=newIpa.replace("r","ɹ");
   newVocab[word]=newIpa;
 }
 
