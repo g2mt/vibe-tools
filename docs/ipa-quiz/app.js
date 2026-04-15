@@ -48,24 +48,68 @@
   let dictPath = dictConfig.path;
   let dictName = dictConfig.name;
 
-  fetch(dictPath)
-    .then(res => {
-      if (!res.ok) throw new Error('Failed to load dictionary.');
-      return res.json();
-    })
-    .then(data => {
-      wordIpaMap = data;
-      wordList = Object.keys(data);
-      dictInfo.textContent = `Loaded dictionary: ${dictName}`;
-      loadingScreen.classList.add('hidden');
-      app.classList.remove('hidden');
-      nextWord();
-      startTimer();
-    })
-    .catch(err => {
-      document.querySelector('.loading-content p').textContent =
-        'Error loading data: ' + err.message;
-    });
+  // ── Load data ──────────────────────────────────────────────────────────────
+  function loadData() {
+    // Clear previous data
+    wordIpaMap = {};
+    wordList = [];
+    
+    // Show loading state
+    loadingScreen.classList.remove('hidden');
+    app.classList.add('hidden');
+    
+    fetch(dictPath)
+      .then(res => {
+        if (!res.ok) throw new Error('Failed to load dictionary.');
+        return res.json();
+      })
+      .then(data => {
+        wordIpaMap = data;
+        wordList = Object.keys(data);
+        dictInfo.textContent = `Loaded dictionary: ${dictName}`;
+        loadingScreen.classList.add('hidden');
+        app.classList.remove('hidden');
+        // Reset game state
+        questionsAnswered = 0;
+        questionsCorrect = 0;
+        updateScore();
+        nextWord();
+        // Timer is already running
+      })
+      .catch(err => {
+        document.querySelector('.loading-content p').textContent =
+          'Error loading data: ' + err.message;
+      });
+  }
+  
+  // Initial load
+  loadData();
+  
+  // Handle dictionary selection change
+  dictSelect.addEventListener('change', () => {
+    const selectedDict = dictSelect.value;
+    const dictConfig = {
+      'cmudict-ipa': {
+        path: 'data/cmudict-ipa/en_US_processed.json',
+        name: 'cmudict-ipa'
+      },
+      'open-dict-data': {
+        path: 'data/open-dict-data/en_US_processed.json',
+        name: 'open-dict-data'
+      }
+    }[selectedDict];
+    
+    dictPath = dictConfig.path;
+    dictName = dictConfig.name;
+    
+    // Update URL without reloading
+    const urlParams = new URLSearchParams(window.location.search);
+    urlParams.set('dict', selectedDict);
+    window.history.replaceState({}, '', `${window.location.pathname}?${urlParams}`);
+    
+    // Load the new dictionary
+    loadData();
+  });
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   function startTimer() {
