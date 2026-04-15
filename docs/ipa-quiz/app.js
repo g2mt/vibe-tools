@@ -30,23 +30,15 @@
   
   // Set up dictionary mapping
   const dictMap = {
-    'cmudict-ipa': {
-      path: 'data/cmudict-ipa/en_US_processed.json',
-      name: 'cmudict-ipa'
-    },
-    'open-dict-data': {
-      path: 'data/open-dict-data/en_US_processed.json',
-      name: 'open-dict-data'
-    }
+    'cmudict-ipa': 'data/cmudict-ipa/en_US_processed.json',
+    'open-dict-data': 'data/open-dict-data/en_US_processed.json'
   };
   
   // Set initial selection based on URL param or default
   const initialDict = dictKey || 'cmudict-ipa';
   dictSelect.value = initialDict;
   
-  const dictConfig = dictMap[initialDict];
-  let dictPath = dictConfig.path;
-  let dictName = dictConfig.name;
+  let dictPath = dictMap[initialDict];
 
   // ── Load data ──────────────────────────────────────────────────────────────
   function loadData() {
@@ -66,7 +58,7 @@
       .then(data => {
         wordIpaMap = data;
         wordList = Object.keys(data);
-        dictInfo.textContent = `Loaded dictionary: ${dictName}`;
+        dictInfo.textContent = `Loaded dictionary: ${selectedDict}`;
         loadingScreen.classList.add('hidden');
         app.classList.remove('hidden');
         // Reset game state
@@ -88,19 +80,7 @@
   // Handle dictionary selection change
   dictSelect.addEventListener('change', () => {
     const selectedDict = dictSelect.value;
-    const dictConfig = {
-      'cmudict-ipa': {
-        path: 'data/cmudict-ipa/en_US_processed.json',
-        name: 'cmudict-ipa'
-      },
-      'open-dict-data': {
-        path: 'data/open-dict-data/en_US_processed.json',
-        name: 'open-dict-data'
-      }
-    }[selectedDict];
-    
-    dictPath = dictConfig.path;
-    dictName = dictConfig.name;
+    dictPath = dictMap[selectedDict];
     
     // Update URL without reloading
     const urlParams = new URLSearchParams(window.location.search);
