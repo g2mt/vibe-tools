@@ -58,7 +58,7 @@
       .then(data => {
         wordIpaMap = data;
         wordList = Object.keys(data);
-        dictInfo.textContent = `Loaded dictionary: ${selectedDict}`;
+        dictInfo.textContent = `Loaded dictionary: ${dictSelect.value}`;
         loadingScreen.classList.add('hidden');
         app.classList.remove('hidden');
         // Reset game state
