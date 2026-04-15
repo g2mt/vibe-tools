@@ -22,17 +22,31 @@
   const dictInfo = document.getElementById('dict-info');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
+  const dictSelect = document.getElementById('dict-select');
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
   const dictKey = urlParams.get('dict');
-  let dictPath = 'data/cmudict-ipa/en_US_processed.json';
-  let dictName = 'cmudict-ipa';
-
-  if (dictKey === 'open-dict-data') {
-    dictPath = 'data/open-dict-data/en_US_processed.json';
-    dictName = 'open-dict-data';
-  }
+  
+  // Set up dictionary mapping
+  const dictMap = {
+    'cmudict-ipa': {
+      path: 'data/cmudict-ipa/en_US_processed.json',
+      name: 'cmudict-ipa'
+    },
+    'open-dict-data': {
+      path: 'data/open-dict-data/en_US_processed.json',
+      name: 'open-dict-data'
+    }
+  };
+  
+  // Set initial selection based on URL param or default
+  const initialDict = dictKey || 'cmudict-ipa';
+  dictSelect.value = initialDict;
+  
+  const dictConfig = dictMap[initialDict];
+  let dictPath = dictConfig.path;
+  let dictName = dictConfig.name;
 
   fetch(dictPath)
     .then(res => {
