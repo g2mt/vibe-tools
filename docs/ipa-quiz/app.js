@@ -66,7 +66,7 @@
         questionsCorrect = 0;
         updateScore();
         nextWord();
-        // Timer is already running
+        startTimer();
       })
       .catch(err => {
         document.querySelector('.loading-content p').textContent =
