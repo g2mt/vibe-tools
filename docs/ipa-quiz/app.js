@@ -61,6 +61,7 @@
         dictInfo.textContent = `Loaded dictionary: ${dictSelect.value}`;
         loadingScreen.classList.add('hidden');
         app.classList.remove('hidden');
+        updateIpaButtons();
         // Reset game state
         questionsAnswered = 0;
         questionsCorrect = 0;
@@ -90,6 +91,25 @@
     // Load the new dictionary
     loadData();
   });
+
+  // ── Update IPA Buttons visibility ──────────────────────────────────────────
+  function updateIpaButtons() {
+    const usedChars = new Set();
+    for (const ipa of Object.values(wordIpaMap)) {
+      for (const char of ipa) {
+        usedChars.add(char);
+      }
+    }
+
+    document.querySelectorAll('.ipa-btn').forEach(btn => {
+      const char = btn.dataset.ipa;
+      if (usedChars.has(char)) {
+        btn.style.display = '';
+      } else {
+        btn.style.display = 'none';
+      }
+    });
+  }
 
   // ── Timer ──────────────────────────────────────────────────────────────────
   function startTimer() {
