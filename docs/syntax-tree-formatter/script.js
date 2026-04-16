@@ -130,15 +130,29 @@ function unformatNode(node) {
   return '[' + node.map(unformatNode).join(' ') + ']';
 }
 
+/**
+ * Modify the textarea's text, using execCommand if supported, otherwise falling back to value assignment.
+ */
+function setTextareaValue(textarea, newText) {
+  if (document.queryCommandSupported && document.queryCommandSupported('selectAll') && document.queryCommandSupported('insertText')) {
+    textarea.focus();
+    textarea.select();
+    if (document.execCommand('insertText', false, newText)) {
+      return;
+    }
+  }
+  textarea.value = newText;
+}
+
 // Wire up buttons
 document.getElementById('format-btn').addEventListener('click', () => {
   const textarea = document.getElementById('input');
-  textarea.value = format(textarea.value);
+  setTextareaValue(textarea, format(textarea.value));
 });
 
 document.getElementById('unformat-btn').addEventListener('click', () => {
   const textarea = document.getElementById('input');
-  textarea.value = unformat(textarea.value);
+  setTextareaValue(textarea, unformat(textarea.value));
 });
 
 /**
@@ -229,7 +243,7 @@ function wrapBlock(textarea) {
   const after = text.substring(closePos + 1);
 
   const wrapped = `[X [${inside}]]`;
-  textarea.value = before + wrapped + after;
+  setTextareaValue(textarea, before + wrapped + after);
 
   // Place cursor after "[X ["
   const newCursorPos = openPos + 4;
@@ -284,7 +298,7 @@ function unwrapBlock(textarea) {
   const inside = text.substring(openPos + 1, closePos);
   const after = text.substring(closePos + 1);
 
-  textarea.value = before + inside + after;
+  setTextareaValue(textarea, before + inside + after);
 
   textarea.selectionStart = openPos;
   textarea.selectionEnd = openPos;
@@ -336,7 +350,7 @@ function shiftLines(textarea, direction) {
   const newText = shiftedLines.join('\n');
   const newLength = newText.length;
 
-  textarea.value = before + newText + after;
+  setTextareaValue(textarea, before + newText + after);
   setTimeout(() => {
     textarea.selectionStart = start;
     textarea.selectionEnd = start + newLength;
