@@ -244,6 +244,59 @@ document.getElementById('wrap-btn').addEventListener('click', () => {
 });
 
 /**
+ * Unwrap the syntax tree block enclosing the cursor by removing its brackets.
+ */
+function unwrapBlock(textarea) {
+  const text = textarea.value;
+  let cursorPos = textarea.selectionStart ?? 0;
+
+  let openPos = -1;
+  let balance = 0;
+  for (let i = cursorPos; i >= 0; i--) {
+    if (text[i] === ']') balance++;
+    if (text[i] === '[') {
+      balance--;
+      if (balance < 0) {
+        openPos = i;
+        break;
+      }
+    }
+  }
+
+  if (openPos === -1) return;
+
+  let closePos = -1;
+  balance = 0;
+  for (let i = openPos; i < text.length; i++) {
+    if (text[i] === '[') balance++;
+    if (text[i] === ']') {
+      balance--;
+      if (balance === 0) {
+        closePos = i;
+        break;
+      }
+    }
+  }
+
+  if (closePos === -1) return;
+
+  const before = text.substring(0, openPos);
+  const inside = text.substring(openPos + 1, closePos);
+  const after = text.substring(closePos + 1);
+
+  textarea.value = before + inside + after;
+
+  textarea.selectionStart = openPos;
+  textarea.selectionEnd = openPos;
+  textarea.focus();
+}
+
+document.getElementById('unwrap-btn').addEventListener('click', () => {
+  const textarea = document.getElementById('input');
+  unwrapBlock(textarea);
+});
+
+/**
  * Indent or dedent the selected lines, or the current line if no selection.
  * Mimics Vim's > and < commands.
  */
