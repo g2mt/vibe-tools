@@ -134,7 +134,7 @@ function unformatNode(node) {
  * Modify the textarea's text, using execCommand if supported, otherwise falling back to value assignment.
  */
 function setTextareaValue(textarea, newText) {
-  if (document.queryCommandSupported && document.queryCommandSupported('selectAll') && document.queryCommandSupported('insertText')) {
+  if (document.queryCommandSupported && document.queryCommandSupported('insertText')) {
     textarea.focus();
     textarea.select();
     if (document.execCommand('insertText', false, newText)) {
