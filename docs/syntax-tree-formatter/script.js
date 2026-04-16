@@ -298,3 +298,13 @@ document.getElementById('indent-btn').addEventListener('click', () => {
 document.getElementById('dedent-btn').addEventListener('click', () => {
   shiftLines(document.getElementById('input'), -1);
 });
+
+document.getElementById('copy-unformatted-btn').addEventListener('click', async () => {
+  const textarea = document.getElementById('input');
+  const unformatted = unformat(textarea.value);
+  try {
+    await navigator.clipboard.writeText(unformatted);
+  } catch (err) {
+    console.error('Failed to copy: ', err);
+  }
+});
