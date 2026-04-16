@@ -207,7 +207,6 @@ function shiftLines(textarea, direction) {
     const lineStart = text.lastIndexOf('\n', start - 1) + 1;
     let lineEnd = text.indexOf('\n', end);
     if (lineEnd === -1) lineEnd = text.length;
-    else lineEnd++; // include the newline
     start = lineStart;
     end = lineEnd;
   }
@@ -229,9 +228,11 @@ function shiftLines(textarea, direction) {
   const newLength = newText.length;
 
   textarea.value = before + newText + after;
-  textarea.selectionStart = start;
-  textarea.selectionEnd = start + newLength;
-  textarea.focus();
+  setTimeout(() => {
+    textarea.selectionStart = start;
+    textarea.selectionEnd = start + newLength;
+    textarea.focus();
+  }, 0);
 }
 
 document.getElementById('indent-btn').addEventListener('click', () => {
