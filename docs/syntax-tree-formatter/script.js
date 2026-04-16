@@ -140,3 +140,49 @@ document.getElementById('unformat-btn').addEventListener('click', () => {
   const textarea = document.getElementById('input');
   textarea.value = unformat(textarea.value);
 });
+
+/**
+ * Select the syntax tree block enclosing the cursor, including brackets.
+ */
+function selectEnclosingBrackets(textarea) {
+  const text = textarea.value;
+  let cursorPos = textarea.selectionStart ?? 0;
+
+  let openPos = -1;
+  let balance = 0;
+  for (let i = cursorPos; i >= 0; i--) {
+    if (text[i] === ']') balance++;
+    if (text[i] === '[') {
+      balance--;
+      if (balance < 0) {
+        openPos = i;
+        break;
+      }
+    }
+  }
+
+  if (openPos === -1) return;
+
+  let closePos = -1;
+  balance = 0;
+  for (let i = openPos; i < text.length; i++) {
+    if (text[i] === '[') balance++;
+    if (text[i] === ']') {
+      balance--;
+      if (balance === 0) {
+        closePos = i;
+        break;
+      }
+    }
+  }
+
+  if (closePos === -1) return;
+
+  textarea.setSelectionRange(openPos, closePos + 1);
+  textarea.focus();
+}
+
+document.getElementById('select-btn').addEventListener('click', () => {
+  const textarea = document.getElementById('input');
+  selectEnclosingBrackets(textarea);
+});
