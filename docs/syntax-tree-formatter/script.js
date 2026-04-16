@@ -186,3 +186,58 @@ document.getElementById('select-btn').addEventListener('click', () => {
   const textarea = document.getElementById('input');
   selectEnclosingBrackets(textarea);
 });
+
+/**
+ * Indent or dedent the selected lines, or the current line if no selection.
+ * Mimics Vim's > and < commands.
+ */
+function shiftLines(textarea, direction) {
+  const text = textarea.value;
+  let start = textarea.selectionStart;
+  let end = textarea.selectionEnd;
+
+  // If no selection, target the current line
+  if (start === end) {
+    const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+    const lineEnd = text.indexOf('\n', start);
+    start = lineStart;
+    end = lineEnd === -1 ? text.length : lineEnd;
+  } else {
+    // Expand selection to cover full lines
+    const lineStart = text.lastIndexOf('\n', start - 1) + 1;
+    let lineEnd = text.indexOf('\n', end);
+    if (lineEnd === -1) lineEnd = text.length;
+    else lineEnd++; // include the newline
+    start = lineStart;
+    end = lineEnd;
+  }
+
+  const before = text.substring(0, start);
+  const selected = text.substring(start, end);
+  const after = text.substring(end);
+
+  const lines = selected.split('\n');
+  const shiftedLines = lines.map(line => {
+    if (direction > 0) {
+      return '  ' + line;
+    } else {
+      return line.replace(/^ {1,2}/, '');
+    }
+  });
+
+  const newText = shiftedLines.join('\n');
+  const newLength = newText.length;
+
+  textarea.value = before + newText + after;
+  textarea.selectionStart = start;
+  textarea.selectionEnd = start + newLength;
+  textarea.focus();
+}
+
+document.getElementById('indent-btn').addEventListener('click', () => {
+  shiftLines(document.getElementById('input'), 1);
+});
+
+document.getElementById('dedent-btn').addEventListener('click', () => {
+  shiftLines(document.getElementById('input'), -1);
+});
