@@ -12,14 +12,14 @@
     <h1>Syntax Tree Formatter</h1>
     <textarea id="input" placeholder="Enter a syntax tree expression, e.g. [category [category item] [category [category item]]]"></textarea>
     <div class="buttons">
-      <button id="format-btn">Format</button>
-      <button id="unformat-btn">Unformat</button>
-      <button id="select-btn">Select Block</button>
-      <button id="wrap-btn">Wrap Block</button>
-      <button id="unwrap-btn">Unwrap Block</button>
+      <button id="format-btn" title="Format the entire syntax tree with indentation">Format</button>
+      <button id="unformat-btn" title="Collapse the syntax tree to a single line">Unformat</button>
+      <button id="select-btn" title="Select the syntax tree block enclosing the cursor">Select Block</button>
+      <button id="wrap-btn" title="Wrap the block enclosing the cursor in a new parent">Wrap Block</button>
+      <button id="unwrap-btn" title="Remove the brackets of the block enclosing the cursor">Unwrap Block</button>
       <button id="dedent-btn" title="Dedent the current line or selected lines">&laquo;</button>
       <button id="indent-btn" title="Indent the current line or selected lines">&raquo;</button>
-      <button id="copy-unformatted-btn">Copy unformatted</button>
+      <button id="copy-unformatted-btn" title="Copy the unformatted syntax tree to clipboard">Copy unformatted</button>
     </div>
   </div>
   <script src="script.js"></script>
