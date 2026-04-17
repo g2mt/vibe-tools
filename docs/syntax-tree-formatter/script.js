@@ -14,7 +14,9 @@ function parse(input) {
       while (pos < tokens.length && tokens[pos] !== ']') {
         node.push(parseNode());
       }
-      pos++; // consume ']'
+      if (pos < tokens.length && tokens[pos] === ']') {
+        pos++; // consume ']'
+      }
       return node;
     } else {
       // It's a plain token (string)
