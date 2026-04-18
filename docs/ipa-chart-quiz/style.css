@@ -173,3 +173,14 @@ th, td {
   content: attr(data-ipa);
   opacity: 1;
 }
+
+.other-symbols {
+  width: auto;
+  align-self: flex-start;
+}
+
+.other-symbols .row-label {
+  width: 250px;
+  text-align: left;
+  padding-left: 1rem;
+}
