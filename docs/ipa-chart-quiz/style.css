@@ -39,6 +39,7 @@ header {
 }
 
 #score-display { color: #a0ffb0; }
+#mistakes-display { color: #ffadad; }
 #timer-display { color: #ffd6a0; font-family: monospace; }
 
 main {
@@ -85,6 +86,10 @@ main {
 
 .phoneme-card.dragging {
   opacity: 0.5;
+}
+
+.phoneme-card.was-wrong {
+  background: #e74c3c;
 }
 
 .charts-container {
@@ -157,6 +162,12 @@ th, td {
   background: #eafaf1;
   font-weight: bold;
   font-size: 1.1rem;
+}
+
+.drop-zone.filled.was-wrong {
+  border-color: #e74c3c;
+  background: #fdedec;
+  color: #e74c3c;
 }
 
 .drop-zone:empty::after {

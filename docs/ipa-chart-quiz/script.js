@@ -4,16 +4,19 @@ const englishPhonemes = [
 ];
 
 let score = 0;
+let mistakes = 0;
 const total = englishPhonemes.length;
 let startTime = Date.now();
 
 const scoreDisplay = document.getElementById('score-display');
+const mistakesDisplay = document.getElementById('mistakes-display');
 const timerDisplay = document.getElementById('timer-display');
 const bankItems = document.getElementById('bank-items');
 const dropZones = document.querySelectorAll('.drop-zone');
 
 function updateScore() {
     scoreDisplay.textContent = `${score} / ${total}`;
+    mistakesDisplay.textContent = `Mistakes: ${mistakes}`;
 }
 
 function updateTimer() {
@@ -39,15 +42,26 @@ function init() {
                 e.preventDefault();
                 zone.classList.remove('over');
                 const draggedIpa = e.dataTransfer.getData('text/plain');
+                const wasWrong = e.dataTransfer.getData('was-wrong') === 'true';
                 
                 if (draggedIpa === ipa && !zone.classList.contains('filled')) {
                     zone.textContent = ipa;
                     zone.classList.add('filled');
+                    if (wasWrong) {
+                        zone.classList.add('was-wrong');
+                    }
                     score++;
                     updateScore();
                     removePhonemeFromBank(ipa);
                     if (score === total) {
                         alert('Congratulations! You completed the chart.');
+                    }
+                } else if (draggedIpa !== ipa && !zone.classList.contains('filled')) {
+                    mistakes++;
+                    updateScore();
+                    const card = document.querySelector(`.phoneme-card[data-ipa="${draggedIpa}"]`);
+                    if (card) {
+                        card.classList.add('was-wrong');
                     }
                 }
             });
@@ -65,6 +79,7 @@ function init() {
         
         card.addEventListener('dragstart', e => {
             e.dataTransfer.setData('text/plain', ipa);
+            e.dataTransfer.setData('was-wrong', card.classList.contains('was-wrong'));
             card.classList.add('dragging');
         });
         
