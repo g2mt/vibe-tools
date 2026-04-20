@@ -7,6 +7,7 @@ let score = 0;
 let mistakes = 0;
 const total = englishPhonemes.length;
 let startTime = Date.now();
+let timerInterval;
 
 const scoreDisplay = document.getElementById('score-display');
 const mistakesDisplay = document.getElementById('mistakes-display');
@@ -54,6 +55,7 @@ function init() {
                     updateScore();
                     removePhonemeFromBank(ipa);
                     if (score === total) {
+                        clearInterval(timerInterval);
                         alert('Congratulations! You completed the chart.');
                     }
                 } else if (draggedIpa !== ipa && !zone.classList.contains('filled')) {
@@ -91,7 +93,7 @@ function init() {
     });
 
     updateScore();
-    setInterval(updateTimer, 1000);
+    timerInterval = setInterval(updateTimer, 1000);
 }
 
 function removePhonemeFromBank(ipa) {
