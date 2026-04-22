@@ -19,6 +19,7 @@
   const ipaInput = document.getElementById('ipa-input');
   const giveUpBtn = document.getElementById('give-up-btn');
   const altSpellingChk = document.getElementById('alt-spelling-chk');
+  const cotCaughtChk = document.getElementById('cot-caught-chk');
   const dictInfo = document.getElementById('dict-info');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
@@ -173,9 +174,19 @@
 
   // ── Normalization for alternative spellings ────────────────────────────────
   function normalizeIpa(str) {
-    if (!altSpellingChk.checked) return str;
-    // Replace ɫ with l, and g (U+0067) with ɡ (U+0261)
-    return str.replace(/ɫ/g, 'l').replace(/g/g, 'ɡ');
+    let result = str;
+    
+    if (altSpellingChk.checked) {
+      // Replace ɫ with l, and g (U+0067) with ɡ (U+0261)
+      result = result.replace(/ɫ/g, 'l').replace(/g/g, 'ɡ');
+    }
+    
+    if (cotCaughtChk.checked) {
+      // Treat ɑ and ɔ as the same. Normalize ɑ to ɔ.
+      result = result.replace(/ɑ/g, 'ɔ');
+    }
+    
+    return result;
   }
 
   // ── Input event: validate on each keystroke ────────────────────────────────
