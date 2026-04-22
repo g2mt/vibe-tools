@@ -24,6 +24,7 @@
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
   const dictSelect = document.getElementById('dict-select');
+  const resetScoreBtn = document.getElementById('reset-score-btn');
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
@@ -91,6 +92,13 @@
     
     // Load the new dictionary
     loadData();
+  });
+
+  // Reset score button handler
+  resetScoreBtn.addEventListener('click', () => {
+    questionsAnswered = 0;
+    questionsCorrect = 0;
+    updateScore();
   });
 
   // ── Update IPA Buttons visibility ──────────────────────────────────────────
