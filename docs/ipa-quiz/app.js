@@ -20,6 +20,7 @@
   const giveUpBtn = document.getElementById('give-up-btn');
   const altSpellingChk = document.getElementById('alt-spelling-chk');
   const cotCaughtChk = document.getElementById('cot-caught-chk');
+  const hardModeChk = document.getElementById('hard-mode-chk');
   const dictInfo = document.getElementById('dict-info');
   const scoreDisplay = document.getElementById('score-display');
   const timerDisplay = document.getElementById('timer-display');
@@ -204,12 +205,22 @@
     return result;
   }
 
-  // ── Input event: validate on each keystroke ────────────────────────────────
+  // ── Input event: live validation (only in hard mode) ───────────────────────
   ipaInput.addEventListener('input', () => {
     const val = ipaInput.value;
     const normVal = normalizeIpa(val);
     const normCurrent = normalizeIpa(currentIpa);
 
+    // If hard mode is OFF, we only clear visual feedback and exit.
+    if (!hardModeChk.checked) {
+      if (val === '') {
+        ipaInput.classList.remove('error', 'success');
+      }
+      // No live error feedback or auto‑completion in easy mode.
+      return;
+    }
+
+    // Hard mode: existing behavior
     if (val === '') {
       ipaInput.classList.remove('error', 'success');
       return;
@@ -224,9 +235,39 @@
       ipaInput.classList.remove('error');
     }
 
-    // Check for match
+    // Check for exact match
     if (normVal === normCurrent) {
       handleCorrect();
+    }
+  });
+
+  // ── Enter key handling for easy mode (and also works in hard mode) ────────
+  ipaInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+
+    const val = ipaInput.value;
+    const normVal = normalizeIpa(val);
+    const normCurrent = normalizeIpa(currentIpa);
+
+    // In hard mode we already handle correct answers on input, but we still
+    // want to treat a wrong Enter press as a penalty.
+    if (hardModeChk.checked) {
+      if (normVal !== normCurrent) {
+        ipaInput.classList.add('error');
+        ipaInput.classList.remove('success');
+        firstAttempt = false;
+      }
+      return;
+    }
+
+    // Easy mode: evaluate only on Enter
+    if (normVal === normCurrent) {
+      handleCorrect();
+    } else {
+      // Wrong answer: show error feedback and mark first attempt as false
+      ipaInput.classList.add('error');
+      ipaInput.classList.remove('success');
+      firstAttempt = false;
     }
   });
 
