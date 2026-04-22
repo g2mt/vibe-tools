@@ -25,6 +25,7 @@
   const timerDisplay = document.getElementById('timer-display');
   const dictSelect = document.getElementById('dict-select');
   const resetScoreBtn = document.getElementById('reset-score-btn');
+  const resetTimerBtn = document.getElementById('reset-timer-btn');
 
   // ── Load data ──────────────────────────────────────────────────────────────
   const urlParams = new URLSearchParams(window.location.search);
@@ -99,6 +100,12 @@
     questionsAnswered = 0;
     questionsCorrect = 0;
     updateScore();
+  });
+
+  // Reset timer button handler
+  resetTimerBtn.addEventListener('click', () => {
+    timerSeconds = 0;
+    timerDisplay.textContent = '00:00';
   });
 
   // ── Update IPA Buttons visibility ──────────────────────────────────────────
