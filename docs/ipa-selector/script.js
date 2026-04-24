@@ -83,7 +83,8 @@ function getNormalizedGrid(table) {
             cell.removeAttribute('colspan');
             expanded.push(cell);
             for (let i = 1; i < colspan; i++) {
-                expanded.push(cell.cloneNode(true));
+                const filler = document.createElement('td');
+                expanded.push(filler);
             }
         });
 
