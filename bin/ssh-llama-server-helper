@@ -73,8 +73,7 @@ def extract_arg(args: List[str], flag: str) -> Optional[str]:
 def check_running_process(host: str, system: str, binary_name: str, model: Optional[str]) -> Optional[str]:
     """Check if the binary is running with the specified model"""
     if system == 'windows':
-        binary_exe = f"{binary_name}.exe"
-        cmd = f'wmic process where "name like \'%{binary_exe}\'" get name,commandline /format:csv'
+        cmd = f'wmic process where "name like \'%{binary_name}\'" get name,commandline /format:csv'
         try:
             result = run_ssh_command(host, cmd)
             if binary_exe in result.stdout:
