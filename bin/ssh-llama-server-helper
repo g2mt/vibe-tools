@@ -70,17 +70,18 @@ def extract_arg(args: List[str], flag: str) -> Optional[str]:
             return args[i + 1]
     return None
 
-def check_running_process(host: str, system: str, model: Optional[str]) -> Optional[str]:
-    """Check if llama-server is running with the specified model"""
+def check_running_process(host: str, system: str, binary_name: str, model: Optional[str]) -> Optional[str]:
+    """Check if the binary is running with the specified model"""
     if system == 'windows':
-        cmd = 'wmic process where "name like \'%llama-server.exe\'" get name,commandline /format:csv'
+        binary_exe = f"{binary_name}.exe"
+        cmd = f'wmic process where "name like \'%{binary_exe}\'" get name,commandline /format:csv'
         try:
             result = run_ssh_command(host, cmd)
-            if 'llama-server.exe' in result.stdout:
+            if binary_exe in result.stdout:
                 # Split output into lines and check each one
                 lines = result.stdout.strip().split('\n')
                 for line in lines:
-                    if 'llama-server.exe' in line:
+                    if binary_exe in line:
                         if model is None or model in line:
                             port_match = re.search(r'--port\s+(\d+)', line)
                             if port_match:
@@ -89,7 +90,7 @@ def check_running_process(host: str, system: str, model: Optional[str]) -> Optio
             logging.warning(f"Error checking running process on Windows: {e}")
     else:
         # Use pgrep to find processes and ps to get command line
-        cmd = "pgrep -f 'llama-server$' | xargs -I {} ps -p {} -o pid,command -h"
+        cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,command -h"
         try:
             result = run_ssh_command(host, cmd)
             if result.returncode == 0 and result.stdout.strip():
@@ -97,7 +98,7 @@ def check_running_process(host: str, system: str, model: Optional[str]) -> Optio
                 lines = result.stdout.strip().split('\n')
                 for line in lines:
                     line = line.strip()
-                    if line and 'llama-server' in line:
+                    if line and binary_name in line:
                         if model is None or model in line:
                             port_match = re.search(r'--port\s+(\d+)', line)
                             if port_match:
@@ -106,12 +107,13 @@ def check_running_process(host: str, system: str, model: Optional[str]) -> Optio
             logging.warning(f"Error checking running process on Unix: {e}")
     return None
 
-def kill_existing_process(host: str, system: str) -> None:
-    """Kill existing llama-server process"""
+def kill_existing_process(host: str, system: str, binary_name: str) -> None:
+    """Kill existing server process"""
     if system == 'windows':
-        cmd = 'wmic process where "name like \'%llama-server.exe\'" delete'
+        binary_exe = f"{binary_name}.exe"
+        cmd = f'wmic process where "name like \'%{binary_exe}\'" delete'
     else:
-        cmd = "pkill -f 'llama-server$'"
+        cmd = f"pkill -f '{binary_name}$'"
 
     try:
         run_ssh_command(host, cmd)
@@ -226,7 +228,8 @@ def create_socket_listener(program_data: ProgramData) -> None:
 
 def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False) -> bool:
     """Start the SSH tunnel process"""
-    running_port = check_running_process(program_data.host, program_data.system, program_data.model)
+    binary_name = os.path.basename(program_data.server_args[0])
+    running_port = check_running_process(program_data.host, program_data.system, binary_name, program_data.model)
     if close_if_not_running and not running_port:
         return False
     
@@ -239,7 +242,7 @@ def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False
     else:
         logging.info("No existing server found, starting new instance")
         if not program_data.no_conflict:
-            kill_existing_process(program_data.host, program_data.system)
+            kill_existing_process(program_data.host, program_data.system, binary_name)
 
         server_args_str = " ".join(program_data.server_args)
 
@@ -444,7 +447,8 @@ def main() -> None:
     # Register cleanup functions here so that simple commands dont delete the socket
     atexit.register(cleanup_socket, program_data.socket_path)
 
-    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, program_data.model)
+    binary_name = os.path.basename(program_data.server_args[0])
+    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, binary_name, program_data.model)
 
     if running_port:
         logging.info(f"Found existing server running on port {running_port}")
@@ -453,7 +457,7 @@ def main() -> None:
     else:
         # Only kill existing processes if not in no-conflict mode and no matching process found
         logging.info("No existing server found, checking for conflicting instances")
-        kill_existing_process(program_data.host, program_data.system)
+        kill_existing_process(program_data.host, program_data.system, binary_name)
 
     start_ssh_tunnel(program_data)
 
