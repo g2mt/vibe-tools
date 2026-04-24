@@ -109,8 +109,7 @@ def check_running_process(host: str, system: str, binary_name: str, model: Optio
 def kill_existing_process(host: str, system: str, binary_name: str) -> None:
     """Kill existing server process"""
     if system == 'windows':
-        binary_exe = f"{binary_name}.exe"
-        cmd = f'wmic process where "name like \'%{binary_exe}\'" delete'
+        cmd = f'wmic process where "name like \'%{binary_name}\'" delete'
     else:
         cmd = f"pkill -f '{binary_name}$'"
 
