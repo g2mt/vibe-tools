@@ -140,11 +140,28 @@ function setTextareaValue(textarea, newText) {
     textarea.focus();
     textarea.select();
     if (document.execCommand('insertText', false, newText)) {
+      localStorage.setItem(STORAGE_KEY, textarea.value);
       return;
     }
   }
   textarea.value = newText;
+  localStorage.setItem(STORAGE_KEY, textarea.value);
 }
+
+// Persistence
+const textarea = document.getElementById('input');
+const STORAGE_KEY = 'syntax-tree-formatter-content';
+
+// Load saved content
+const savedContent = localStorage.getItem(STORAGE_KEY);
+if (savedContent) {
+  textarea.value = savedContent;
+}
+
+// Save on input
+textarea.addEventListener('input', () => {
+  localStorage.setItem(STORAGE_KEY, textarea.value);
+});
 
 // Wire up buttons
 document.getElementById('format-btn').addEventListener('click', () => {
