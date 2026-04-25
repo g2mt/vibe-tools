@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manual - Syntax Tree Formatter</title>
+  <link rel="stylesheet" href="manual.css">
+</head>
+<body>
+  <div class="container">
+    <p><a href="index.html">back to tool</a></p>
+    <h1>Syntax Tree Formatter Manual</h1>
+    
+    <section>
+      <h2>Overview</h2>
+      <p>This tool helps format and manipulate Lisp-style syntax trees (e.g., <code>[S [NP John] [VP [V eats] [NP apple]]]</code>).</p>
+    </section>
+
+    <section>
+      <h2>Buttons</h2>
+      
+      <h3>Format</h3>
+      <p>Pretty-prints the entire tree with indentation and newlines. Flat nodes (nodes with no nested brackets) are kept on a single line.</p>
+
+      <h3>Unformat</h3>
+      <p>Collapses the entire tree into a single line, removing all unnecessary whitespace.</p>
+
+      <h3>Select Block</h3>
+      <p>Selects the smallest bracketed expression <code>[...]</code> that contains the cursor.</p>
+      <table>
+        <tr><th>Before</th><th>After</th></tr>
+        <tr>
+          <td><pre>[S [NP John|] [VP eats]]</pre></td>
+          <td><pre>[S <span class="highlight">[NP John]</span> [VP eats]]</pre></td>
+        </tr>
+      </table>
+
+      <h3>Wrap Block</h3>
+      <p>Wraps the current block in a new parent node labeled "X". The cursor is placed at the label for easy renaming.</p>
+      <table>
+        <tr><th>Before</th><th>After</th></tr>
+        <tr>
+          <td><pre>[S <span class="highlight">[NP John]</span> [VP eats]]</pre></td>
+          <td><pre>[S [X| [NP John]] [VP eats]]</pre></td>
+        </tr>
+      </table>
+
+      <h3>Unwrap Block</h3>
+      <p>Removes the brackets of the current block, effectively promoting its contents to the parent level.</p>
+      <table>
+        <tr><th>Before</th><th>After</th></tr>
+        <tr>
+          <td><pre>[S <span class="highlight">[NP John]</span> [VP eats]]</pre></td>
+          <td><pre>[S John| [VP eats]]</pre></td>
+        </tr>
+      </table>
+
+      <h3>Indent (&raquo;) and Dedent (&laquo;)</h3>
+      <p>Shifts the selected lines (or the current line) by 2 spaces. Mimics Vim's <code>&gt;</code> and <code>&lt;</code> behavior.</p>
+      <table>
+        <tr><th>Before</th><th>After</th></tr>
+        <tr>
+          <td><pre>[S
+<span class="highlight">  [NP John]</span>
+  [VP eats]]</pre></td>
+          <td><pre>[S
+<span class="highlight">    [NP John]</span>
+  [VP eats]]</pre></td>
+        </tr>
+      </table>
+
+      <h3>Copy unformatted</h3>
+      <p>Collapses the tree to a single line and copies the result to your clipboard without changing the text in the editor.</p>
+    </section>
+  </div>
+</body>
+</html>
