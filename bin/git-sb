@@ -105,7 +105,7 @@ class Program:
                     found = e
                     break
             if not found:
-                sys.exit(f"Error: No subtree found for path '{prefix}'")
+                raise ValueError(f"Error: No subtree found for path '{prefix}'")
             cmd_list = ["git", "subtree", "pull", "--prefix", found.path, found.url, found.branch, "--squash"]
             self.run_cmd(cmd_list)
         else:
