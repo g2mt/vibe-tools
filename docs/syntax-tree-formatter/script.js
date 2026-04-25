@@ -247,10 +247,11 @@ function wrapBlock(textarea) {
   const wrapped = `[X [${inside}]]`;
   setTextareaValue(textarea, before + wrapped + after);
 
-  // Place cursor after "[X ["
-  const newCursorPos = openPos + 4;
-  textarea.selectionStart = newCursorPos;
-  textarea.selectionEnd = newCursorPos;
+  // Select the "X" label for easy renaming
+  const labelStart = openPos + 1;
+  const labelEnd = openPos + 2;
+  textarea.selectionStart = labelStart;
+  textarea.selectionEnd = labelEnd;
   textarea.focus();
 }
 
