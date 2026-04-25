@@ -21,6 +21,7 @@ class Subtree:
 class Program:
     def __init__(self, args):
         self.args = args
+        self.always_yes = False
 
     def get_repo_root(self):
         result = subprocess.run(
@@ -69,9 +70,13 @@ class Program:
             print(f"{ANSI_GRAY}{cmd_str}{ANSI_RESET}")
         if self.args.dry_run:
             return
-        if interactive:
-            resp = input(f"{ANSI_BOLD}Execute? [Y/n]{ANSI_RESET} ").strip().lower()
-            if resp in ('n', 'no'):
+        if self.always_yes:
+            pass
+        elif interactive:
+            resp = input(f"{ANSI_BOLD}Execute? (Y)es, (N)o, (A)ll: {ANSI_RESET} ").strip().lower()
+            if resp in ('a', 'all'):
+                self.always_yes = True
+            elif resp in ('n', 'no'):
                 print(f"{ANSI_GRAY}Skipped.{ANSI_RESET}")
                 return
         if quiet:
