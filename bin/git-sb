@@ -69,7 +69,7 @@ class Program:
         if self.args.dry_run:
             return
         if interactive:
-            resp = input("Execute? [Y/n] ").strip().lower()
+            resp = input("\033[1mExecute? [Y/n]\033[0m ").strip().lower()
             if resp in ('n', 'no'):
                 print(f"{ANSI_GRAY}Skipped.{ANSI_RESET}")
                 return
