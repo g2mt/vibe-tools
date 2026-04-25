@@ -34,10 +34,20 @@ class Program:
             if data is None:
                 return []
             if not isinstance(data, list):
-                print("Warning: .gitsubtrees is not a list; resetting", file=sys.stderr)
-                return []
-            valid_dicts = [e for e in data if isinstance(e, dict) and 'path' in e and 'url' in e]
-            return [Subtree(path=e['path'], url=e['url'], branch=e.get('branch', 'master')) for e in valid_dicts]
+                raise ValueError(f".gitsubtrees file must contain a list, got {type(data).__name__}")
+            entries = []
+            for entry in data:
+                if not isinstance(entry, dict):
+                    raise ValueError(f"Each entry must be a mapping, got {type(entry).__name__}: {entry}")
+                if 'path' not in entry or 'url' not in entry:
+                    raise ValueError(f"Each entry must have 'path' and 'url' keys, got {entry}")
+                e = Subtree(
+                    path=entry['path'],
+                    url=entry['url'],
+                    branch=entry.get('branch', 'master')
+                )
+                entries.append(e)
+            return entries
 
     def save_gitsubtrees(self, repo_root, entries):
         path = os.path.join(repo_root, '.gitsubtrees')
