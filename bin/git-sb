@@ -6,7 +6,8 @@ import subprocess
 import yaml
 
 ANSI_GRAY = "\033[90m"
-ANSI_RESET = "\033[0m"
+ANSI_RESET ="\033[0m"
+ANSI_BOLD = "\033[1m"
 
 class Subtree:
     def __init__(self, path, url, branch='master'):
@@ -69,7 +70,7 @@ class Program:
         if self.args.dry_run:
             return
         if interactive:
-            resp = input("\033[1mExecute? [Y/n]\033[0m ").strip().lower()
+            resp = input(f"{ANSI_BOLD}Execute? [Y/n]{ANSI_RESET} ").strip().lower()
             if resp in ('n', 'no'):
                 print(f"{ANSI_GRAY}Skipped.{ANSI_RESET}")
                 return
