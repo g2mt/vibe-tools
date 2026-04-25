@@ -5,6 +5,13 @@ import argparse
 import subprocess
 import yaml
 
+class Subtree:
+    def __init__(self, path, url, branch='master'):
+        self.path = path
+        self.url = url
+        self.branch = branch
+
+
 class Program:
     def __init__(self, args):
         self.args = args
@@ -29,13 +36,14 @@ class Program:
             if not isinstance(data, list):
                 print("Warning: .gitsubtrees is not a list; resetting", file=sys.stderr)
                 return []
-            valid = [e for e in data if isinstance(e, dict) and 'path' in e and 'url' in e]
-            return valid
+            valid_dicts = [e for e in data if isinstance(e, dict) and 'path' in e and 'url' in e]
+            return [Subtree(path=e['path'], url=e['url'], branch=e.get('branch', 'master')) for e in valid_dicts]
 
     def save_gitsubtrees(self, repo_root, entries):
         path = os.path.join(repo_root, '.gitsubtrees')
+        dict_entries = [{'path': e.path, 'url': e.url, 'branch': e.branch} for e in entries]
         with open(path, 'w') as f:
-            yaml.dump(entries, f, default_flow_style=False)
+            yaml.dump(dict_entries, f, default_flow_style=False)
 
     def run_cmd(self, cmd_list):
         quiet = self.args.quiet
@@ -65,10 +73,10 @@ class Program:
         self.run_cmd(cmd_list)
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
-            if e['path'] == prefix:
+            if e.path == prefix:
                 print(f"Entry already exists for path '{prefix}', not recording duplicate.", file=sys.stderr)
                 return
-        entry = {'path': prefix, 'url': url, 'branch': 'master'}
+        entry = Subtree(path=prefix, url=url, branch='master')
         entries.append(entry)
         self.save_gitsubtrees(repo_root, entries)
 
@@ -83,18 +91,16 @@ class Program:
             prefix = os.path.join(prefix, self.args.folder)
             found = None
             for e in entries:
-                if e['path'] == prefix:
+                if e.path == prefix:
                     found = e
                     break
             if not found:
                 sys.exit(f"Error: No subtree found for path '{prefix}'")
-            branch = found.get('branch', 'master')
-            cmd_list = ["git", "subtree", "pull", "--prefix", found['path'], found['url'], branch, "--squash"]
+            cmd_list = ["git", "subtree", "pull", "--prefix", found.path, found.url, found.branch, "--squash"]
             self.run_cmd(cmd_list)
         else:
             for e in entries:
-                branch = e.get('branch', 'master')
-                cmd_list = ["git", "subtree", "pull", "--prefix", e['path'], e['url'], branch, "--squash"]
+                cmd_list = ["git", "subtree", "pull", "--prefix", e.path, e.url, e.branch, "--squash"]
                 self.run_cmd(cmd_list)
 
     def execute(self):
