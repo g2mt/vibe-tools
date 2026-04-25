@@ -37,7 +37,10 @@ def run_cmd(cmd_list, args):
     quiet = args.quiet
     interactive = args.interactive
     cmd_str = ' '.join(cmd_list)
-    print(f"\033[90m{cmd_str}\033[0m")
+    if not quiet:
+        print(f"\033[90m{cmd_str}\033[0m")
+    if getattr(args, 'dry_run', False):
+        return
     if interactive:
         resp = input("Execute? [Y/n] ").strip().lower()
         if resp in ('n', 'no'):
@@ -94,6 +97,7 @@ def main():
     parser = argparse.ArgumentParser(description="Manage git subtrees")
     parser.add_argument('-q', '--quiet', action='store_true', help='Suppress output of git commands')
     parser.add_argument('-i', '--interactive', action='store_true', help='Ask before executing external commands')
+    parser.add_argument('-d', '--dry-run', action='store_true', help='Show commands but do not execute them')
     subparsers = parser.add_subparsers(dest='command', required=True, help='sub-command help')
     add_parser = subparsers.add_parser('add', help='Add a subtree')
     add_parser.add_argument('url', help='Repository URL')
