@@ -5,7 +5,7 @@ import argparse
 import subprocess
 import yaml
 
-class GitSubtrees:
+class Program:
     def __init__(self, args):
         self.args = args
 
@@ -115,7 +115,7 @@ def main():
     pull_parser = subparsers.add_parser('pull', help='Pull subtree updates')
     pull_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (optional; if omitted, pull all)')
     args = parser.parse_args()
-    program = GitSubtrees(args)
+    program = Program(args)
     program.execute()
 
 if __name__ == '__main__':
