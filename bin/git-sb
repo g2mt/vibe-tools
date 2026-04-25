@@ -5,6 +5,10 @@ import argparse
 import subprocess
 import yaml
 
+# ANSI color constants
+ANSI_GRAY = "\033[90m"
+ANSI_RESET = "\033[0m"
+
 class Subtree:
     def __init__(self, path, url, branch='master'):
         self.path = path
@@ -60,13 +64,13 @@ class Program:
         interactive = self.args.interactive
         cmd_str = ' '.join(cmd_list)
         if not quiet:
-            print(f"\033[90m{cmd_str}\033[0m")
+            print(f"{ANSI_GRAY}{cmd_str}{ANSI_RESET}")
         if self.args.dry_run:
             return
         if interactive:
             resp = input("Execute? [Y/n] ").strip().lower()
             if resp in ('n', 'no'):
-                print("Skipped.")
+                print(f"{ANSI_GRAY}Skipped.{ANSI_RESET}")
                 return
         if quiet:
             subprocess.run(cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -93,7 +97,7 @@ class Program:
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
             if e.path == prefix:
-                print(f"Entry already exists for path '{prefix}', not recording duplicate.", file=sys.stderr)
+                print(f"{ANSI_GRAY}Entry already exists for path '{prefix}', not recording duplicate.{ANSI_RESET}", file=sys.stderr)
                 return
         entry = Subtree(path=prefix, url=url, branch='master')
         entries.append(entry)
