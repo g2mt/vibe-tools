@@ -80,8 +80,7 @@ class Program:
             text=True,
         )
         if result.stdout.strip():
-            print("Error: working tree has modifications; commit or stash before pulling subtrees.", file=sys.stderr)
-            sys.exit(1)
+            raise ValueError("working tree has modifications; commit or stash before pulling subtrees.", file=sys.stderr)
 
     def cmd_add(self):
         repo_root = self.get_repo_root()
@@ -105,7 +104,6 @@ class Program:
         self._check_working_tree_clean()
         entries = self.load_gitsubtrees(repo_root)
         if not entries:
-            print("No subtrees recorded in .gitsubtrees.")
             return
         if self.args.folder:
             prefix = os.environ.get('GIT_PREFIX', '.')
@@ -116,7 +114,7 @@ class Program:
                     found = e
                     break
             if not found:
-                raise ValueError(f"Error: No subtree found for path '{prefix}'")
+                raise ValueError(f"No subtree found for path '{prefix}'")
             cmd_list = ["git", "subtree", "pull", "--prefix", found.path, found.url, found.branch, "--squash"]
             self.run_cmd(cmd_list)
         else:
