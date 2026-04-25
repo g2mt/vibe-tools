@@ -73,6 +73,16 @@ class Program:
         else:
             subprocess.run(cmd_list)
 
+    def _check_working_tree_clean(self):
+        result = subprocess.run(
+            ['git', 'status', '--porcelain'],
+            capture_output=True,
+            text=True,
+        )
+        if result.stdout.strip():
+            print("Error: working tree has modifications; commit or stash before pulling subtrees.", file=sys.stderr)
+            sys.exit(1)
+
     def cmd_add(self):
         repo_root = self.get_repo_root()
         prefix = os.environ.get('GIT_PREFIX', '.')
@@ -92,6 +102,7 @@ class Program:
 
     def cmd_pull(self):
         repo_root = self.get_repo_root()
+        self._check_working_tree_clean()
         entries = self.load_gitsubtrees(repo_root)
         if not entries:
             print("No subtrees recorded in .gitsubtrees.")
