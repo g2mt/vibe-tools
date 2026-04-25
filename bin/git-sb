@@ -5,7 +5,6 @@ import argparse
 import subprocess
 import yaml
 
-# ANSI color constants
 ANSI_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 
@@ -14,7 +13,8 @@ class Subtree:
         self.path = path
         self.url = url
         self.branch = branch
-
+    def get_squash_cmd(self, action):
+        return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash"]
 
 class Program:
     def __init__(self, args):
@@ -92,7 +92,7 @@ class Program:
         if self.args.folder:
             prefix = os.path.join(prefix, self.args.folder)
         url = self.args.url
-        cmd_list = ["git", "subtree", "add", "--prefix", prefix, url, "master", "--squash"]
+        cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add')
         self.run_cmd(cmd_list)
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
@@ -119,11 +119,11 @@ class Program:
                     break
             if not found:
                 raise ValueError(f"No subtree found for path '{prefix}'")
-            cmd_list = ["git", "subtree", "pull", "--prefix", found.path, found.url, found.branch, "--squash"]
+            cmd_list = found.get_squash_cmd('pull')
             self.run_cmd(cmd_list)
         else:
             for e in entries:
-                cmd_list = ["git", "subtree", "pull", "--prefix", e.path, e.url, e.branch, "--squash"]
+                cmd_list = e.get_squash_cmd('pull')
                 self.run_cmd(cmd_list)
 
     def execute(self):
