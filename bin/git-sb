@@ -13,6 +13,7 @@ class Subtree:
         self.path = path
         self.url = url
         self.branch = branch
+
     def get_squash_cmd(self, action):
         return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash"]
 
