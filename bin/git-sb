@@ -125,9 +125,10 @@ class Program:
         if self.args.folder:
             prefix = os.environ.get('GIT_PREFIX', '.')
             prefix = os.path.join(prefix, self.args.folder)
+            prefix = os.path.realpath(prefix)
             found = None
             for e in entries:
-                if e.path == prefix:
+                if os.path.realpath(e.path) == prefix:
                     found = e
                     break
             if not found:
