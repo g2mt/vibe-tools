@@ -16,6 +16,9 @@ class Subtree:
         self.branch = branch
 
     def get_squash_cmd(self, action):
+        # If attempting to pull but the subtree path does not exist, fall back to add
+        if action == 'pull' and not os.path.isdir(self.path):
+            action = 'add'
         return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash","-m", f"Merge {self.url}"]
 
 class Program:
