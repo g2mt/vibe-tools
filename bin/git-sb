@@ -9,6 +9,7 @@ from dataclasses import dataclass, field, asdict
 ANSI_GRAY = "\033[90m"
 ANSI_RESET ="\033[0m"
 ANSI_BOLD = "\033[1m"
+ANSI_BG_CYAN = "\033[7;36m"
 
 @dataclass
 class Subtree:
@@ -147,11 +148,29 @@ class Program:
                 cmd_list = e.get_squash_cmd('pull', repo_root)
                 self.run_cmd(cmd_list, cwd=repo_root)
 
+    def cmd_tags(self):
+        repo_root = self.get_repo_root()
+        entries = self.load_gitsubtrees(repo_root)
+        if not entries:
+            return
+        # Build mapping tag -> list of paths
+        tag_to_paths = {}
+        for e in entries:
+            for t in e.tags:
+                tag_to_paths.setdefault(t, []).append(e.path)
+        # Print each tag line
+        for tag in sorted(tag_to_paths.keys()):
+            paths = tag_to_paths[tag]
+            paths_str = ", ".join(paths)
+            print(f"{ANSI_BG_CYAN}{tag}{ANSI_RESET}: {paths_str}")
+
     def execute(self):
         if self.args.command == 'add':
             self.cmd_add()
         elif self.args.command == 'pull':
             self.cmd_pull()
+        elif self.args.command == 'tags':
+            self.cmd_tags()
 
 def main():
     parser = argparse.ArgumentParser(description="Manage git subtrees")
@@ -165,6 +184,7 @@ def main():
     pull_parser = subparsers.add_parser('pull', help='Pull subtree updates')
     pull_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (optional; if omitted, pull all)')
     pull_parser.add_argument('-t', '--tag', action='append', dest='tags', default=None, help='Only pull subtrees with this tag (can be repeated)')
+    tags_parser = subparsers.add_parser('tags', help='Show list of tags and their directories')
     args = parser.parse_args()
     program = Program(args)
     program.execute()
