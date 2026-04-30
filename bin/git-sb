@@ -68,7 +68,7 @@ class Program:
         with open(path, 'w') as f:
             yaml.dump(dict_entries, f, default_flow_style=False)
 
-    def run_cmd(self, cmd_list):
+    def run_cmd(self, cmd_list, cwd=None):
         quiet = self.args.quiet
         interactive = self.args.interactive
         cmd_str = ' '.join(cmd_list)
@@ -89,9 +89,9 @@ class Program:
                 return
 
         if quiet:
-            subprocess.run(cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(cmd_list, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=cwd)
         else:
-            subprocess.run(cmd_list)
+            subprocess.run(cmd_list, cwd=cwd)
 
     def _check_working_tree_clean(self):
         result = subprocess.run(
@@ -109,7 +109,7 @@ class Program:
             prefix = os.path.join(prefix, self.args.folder)
         url = self.args.url
         cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add')
-        self.run_cmd(cmd_list)
+        self.run_cmd(cmd_list, cwd=repo_root)
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
             if e.path == prefix:
@@ -141,11 +141,11 @@ class Program:
             if not found:
                 raise ValueError(f"No subtree found for path '{prefix}'")
             cmd_list = found.get_squash_cmd('pull')
-            self.run_cmd(cmd_list)
+            self.run_cmd(cmd_list, cwd=repo_root)
         else:
             for e in entries:
                 cmd_list = e.get_squash_cmd('pull')
-                self.run_cmd(cmd_list)
+                self.run_cmd(cmd_list, cwd=repo_root)
 
     def execute(self):
         if self.args.command == 'add':
