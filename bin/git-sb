@@ -162,7 +162,7 @@ class Program:
         for tag in sorted(tag_to_paths.keys()):
             paths = tag_to_paths[tag]
             paths_str = ", ".join(paths)
-            print(f"{ANSI_CYAN}{tag}{ANSI_RESET}: {paths_str}")
+            print(f"{ANSI_CYAN}{tag}:{ANSI_RESET} {paths_str}")
 
     def execute(self):
         if self.args.command == 'add':
