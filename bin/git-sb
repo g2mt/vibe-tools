@@ -104,7 +104,7 @@ class Program:
 
     def cmd_add(self):
         repo_root = self.get_repo_root()
-        prefix = os.environ.get('GIT_PREFIX', '.')
+        prefix = os.path.relpath(os.path.curdir, repo_root)
         if self.args.folder:
             prefix = os.path.join(prefix, self.args.folder)
         url = self.args.url
@@ -130,7 +130,7 @@ class Program:
         if tag_filter:
             entries = [e for e in entries if e.tags and any(t in e.tags for t in tag_filter)]
         if self.args.folder:
-            prefix = os.environ.get('GIT_PREFIX', '.')
+            prefix = os.path.relpath(os.path.curdir, repo_root)
             prefix = os.path.join(prefix, self.args.folder)
             prefix = os.path.realpath(prefix)
             found = None
