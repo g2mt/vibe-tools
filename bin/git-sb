@@ -100,7 +100,7 @@ class Program:
             text=True,
         )
         if result.stdout.strip():
-            raise ValueError("working tree has modifications; commit or stash before pulling subtrees.", file=sys.stderr)
+            raise ValueError("working tree has modifications; commit or stash before pulling subtrees.")
 
     def cmd_add(self):
         repo_root = self.get_repo_root()
