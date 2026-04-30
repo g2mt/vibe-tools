@@ -17,9 +17,9 @@ class Subtree:
     branch: str = 'master'
     tags: list = field(default_factory=list)
 
-    def get_squash_cmd(self, action):
+    def get_squash_cmd(self, action, repo_root):
         # If attempting to pull but the subtree path does not exist, fall back to add
-        if action == 'pull' and not os.path.isdir(self.path):
+        if action == 'pull' and not os.path.isdir(os.path.join(repo_root, self.path)):
             action = 'add'
         return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash","-m", f"Merge {self.url}"]
 
@@ -108,7 +108,7 @@ class Program:
         if self.args.folder:
             prefix = os.path.join(prefix, self.args.folder)
         url = self.args.url
-        cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add')
+        cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add', repo_root)
         self.run_cmd(cmd_list, cwd=repo_root)
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
@@ -140,11 +140,11 @@ class Program:
                     break
             if not found:
                 raise ValueError(f"No subtree found for path '{prefix}'")
-            cmd_list = found.get_squash_cmd('pull')
+            cmd_list = found.get_squash_cmd('pull', repo_root)
             self.run_cmd(cmd_list, cwd=repo_root)
         else:
             for e in entries:
-                cmd_list = e.get_squash_cmd('pull')
+                cmd_list = e.get_squash_cmd('pull', repo_root)
                 self.run_cmd(cmd_list, cwd=repo_root)
 
     def execute(self):
