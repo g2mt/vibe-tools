@@ -4,7 +4,7 @@ import sys
 import argparse
 import subprocess
 import yaml
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 ANSI_GRAY = "\033[90m"
 ANSI_RESET ="\033[0m"
@@ -15,6 +15,7 @@ class Subtree:
     path: str
     url: str
     branch: str = 'master'
+    tags: list = field(default_factory=list)
 
     def get_squash_cmd(self, action):
         # If attempting to pull but the subtree path does not exist, fall back to add
@@ -55,14 +56,15 @@ class Program:
                 e = Subtree(
                     path=entry['path'],
                     url=entry['url'],
-                    branch=entry.get('branch', 'master')
+                    branch=entry.get('branch', 'master'),
+                    tags=entry.get('tags', [])
                 )
                 entries.append(e)
             return entries
 
     def save_gitsubtrees(self, repo_root, entries):
         path = os.path.join(repo_root, '.gitsubtrees')
-        dict_entries = [{'path': e.path, 'url': e.url, 'branch': e.branch} for e in entries]
+        dict_entries = [{'path': e.path, 'url': e.url, 'branch': e.branch, 'tags': e.tags} for e in entries]
         with open(path, 'w') as f:
             yaml.dump(dict_entries, f, default_flow_style=False)
 
@@ -123,6 +125,10 @@ class Program:
         entries = self.load_gitsubtrees(repo_root)
         if not entries:
             return
+        # Filter by tags if provided
+        tag_filter = self.args.tags
+        if tag_filter:
+            entries = [e for e in entries if e.tags and any(t in e.tags for t in tag_filter)]
         if self.args.folder:
             prefix = os.environ.get('GIT_PREFIX', '.')
             prefix = os.path.join(prefix, self.args.folder)
@@ -158,6 +164,7 @@ def main():
     add_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (relative to current dir)')
     pull_parser = subparsers.add_parser('pull', help='Pull subtree updates')
     pull_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (optional; if omitted, pull all)')
+    pull_parser.add_argument('-t', '--tag', action='append', dest='tags', default=None, help='Only pull subtrees with this tag (can be repeated)')
     args = parser.parse_args()
     program = Program(args)
     program.execute()
