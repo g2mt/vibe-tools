@@ -125,6 +125,11 @@ class Program:
         source = self.args.source
         dest = self.args.dest
 
+        # 0. Assert source is an actual existing subtree in .gitsubtrees
+        entries = self.load_gitsubtrees(repo_root)
+        if not any(e.path == source for e in entries):
+            raise ValueError(f"Path '{source}' is not registered as a subtree in .gitsubtrees")
+
         # 1. Find the last subtree split hash for the source path
         log_cmd = ["git", "log", "-1", "--grep", f"git-subtree-dir: {source}"]
         result = subprocess.run(log_cmd, capture_output=True, text=True, cwd=repo_root)
@@ -147,7 +152,6 @@ class Program:
         self.run_cmd(["git", "commit", "--allow-empty", "-m", msg], cwd=repo_root)
 
         # 4. Update .gitsubtrees
-        entries = self.load_gitsubtrees(repo_root)
         found = False
         for e in entries:
             if e.path == source:
