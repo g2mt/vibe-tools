@@ -22,6 +22,9 @@ class Subtree:
         # If attempting to pull but the subtree path does not exist, fall back to add
         if action == 'pull' and not os.path.isdir(os.path.join(repo_root, self.path)):
             action = 'add'
+        path = self.path
+        if path.startswith("./"):
+            path=path[2:]
         return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash","-m", f"Merge {self.url}"]
 
 class Program:
@@ -122,8 +125,9 @@ class Program:
 
     def cmd_mv(self):
         repo_root = self.get_repo_root()
-        source = self.args.source
-        dest = self.args.dest
+
+        source = os.path.relpath(self.args.source, repo_root)
+        dest = os.path.relpath(self.args.dest, repo_root)
 
         # 0. Assert source is an actual existing subtree in .gitsubtrees
         entries = self.load_gitsubtrees(repo_root)
@@ -160,7 +164,8 @@ class Program:
                 break
         
         if found:
-            self.save_gitsubtrees(repo_root, entries)
+            if not self.args.dry_run:
+                self.save_gitsubtrees(repo_root, entries)
             self.run_cmd(["git", "add", ".gitsubtrees"], cwd=repo_root)
             self.run_cmd(["git", "commit", "-m", f"Update .gitsubtrees path {source} -> {dest}"], cwd=repo_root)
 
