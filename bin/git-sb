@@ -120,6 +120,46 @@ class Program:
         entries.append(entry)
         self.save_gitsubtrees(repo_root, entries)
 
+    def cmd_mv(self):
+        repo_root = self.get_repo_root()
+        source = self.args.source
+        dest = self.args.dest
+
+        # 1. Find the last subtree split hash for the source path
+        log_cmd = ["git", "log", "-1", "--grep", f"git-subtree-dir: {source}"]
+        result = subprocess.run(log_cmd, capture_output=True, text=True, cwd=repo_root)
+        
+        split_hash = None
+        for line in result.stdout.splitlines():
+            if line.strip().startswith("git-subtree-split:"):
+                split_hash = line.split(":")[1].strip()
+                break
+        
+        if not split_hash:
+            raise ValueError(f"Could not find subtree metadata for path '{source}'")
+
+        # 2. git mv source dest
+        self.run_cmd(["git", "mv", source, dest], cwd=repo_root)
+        self.run_cmd(["git", "commit", "-m", f"Move subtree {source} to {dest}"], cwd=repo_root)
+
+        # 3. Create empty commit with metadata
+        msg = f"Reassign subtree dir from {source} to {dest}\n\ngit-subtree-dir: {dest}\ngit-subtree-split: {split_hash}"
+        self.run_cmd(["git", "commit", "--allow-empty", "-m", msg], cwd=repo_root)
+
+        # 4. Update .gitsubtrees
+        entries = self.load_gitsubtrees(repo_root)
+        found = False
+        for e in entries:
+            if e.path == source:
+                e.path = dest
+                found = True
+                break
+        
+        if found:
+            self.save_gitsubtrees(repo_root, entries)
+            self.run_cmd(["git", "add", ".gitsubtrees"], cwd=repo_root)
+            self.run_cmd(["git", "commit", "-m", f"Update .gitsubtrees path {source} -> {dest}"], cwd=repo_root)
+
     def cmd_pull(self):
         repo_root = self.get_repo_root()
         self._check_working_tree_clean()
@@ -169,6 +209,8 @@ class Program:
             self.cmd_add()
         elif self.args.command == 'pull':
             self.cmd_pull()
+        elif self.args.command == 'mv':
+            self.cmd_mv()
         elif self.args.command == 'tags':
             self.cmd_tags()
 
@@ -184,6 +226,9 @@ def main():
     pull_parser = subparsers.add_parser('pull', help='Pull subtree updates')
     pull_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (optional; if omitted, pull all)')
     pull_parser.add_argument('-t', '--tag', action='append', dest='tags', default=None, help='Only pull subtrees with this tag (can be repeated)')
+    mv_parser = subparsers.add_parser('mv', help='Move a subtree prefix')
+    mv_parser.add_argument('source', help='Current subtree path')
+    mv_parser.add_argument('dest', help='New subtree path')
     tags_parser = subparsers.add_parser('tags', help='Show list of tags and their directories')
     args = parser.parse_args()
     program = Program(args)
