@@ -25,7 +25,7 @@ class Subtree:
         path = self.path
         if path.startswith("./"):
             path=path[2:]
-        return ["git","subtree",action,"--prefix",self.path,self.url,self.branch,"--squash","-m", f"Merge {self.url}"]
+        return ["git","subtree",action,"--prefix",path,self.url,self.branch,"--squash","-m", f"Merge {self.url}"]
 
 class Program:
     def __init__(self, args):
