@@ -1,5 +1,7 @@
 #!/usr/bin/python3
 import os
+from urllib.parse import urlparse
+from pathlib import Path
 import sys
 import argparse
 import subprocess
@@ -108,10 +110,12 @@ class Program:
 
     def cmd_add(self):
         repo_root = self.get_repo_root()
+        url = self.args.url
         prefix = os.path.relpath(os.path.curdir, repo_root)
         if self.args.folder:
             prefix = os.path.join(prefix, self.args.folder)
-        url = self.args.url
+        else:
+            prefix = os.path.join(prefix, Path(urlparse(url).path).name)
         cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add', repo_root)
         self.run_cmd(cmd_list, cwd=repo_root)
         entries = self.load_gitsubtrees(repo_root)
