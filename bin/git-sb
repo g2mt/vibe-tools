@@ -73,6 +73,8 @@ class Program:
         dict_entries = [asdict(e) for e in entries]
         with open(path, 'w') as f:
             yaml.dump(dict_entries, f, default_flow_style=False)
+        self.run_cmd(["git", "add", ".gitsubtrees"], cwd=repo_root)
+        self.run_cmd(["git", "commit", "-m", f"Update .gitsubtrees"], cwd=repo_root)
 
     def run_cmd(self, cmd_list, cwd=None):
         quiet = self.args.quiet
@@ -170,8 +172,6 @@ class Program:
         if found:
             if not self.args.dry_run:
                 self.save_gitsubtrees(repo_root, entries)
-            self.run_cmd(["git", "add", ".gitsubtrees"], cwd=repo_root)
-            self.run_cmd(["git", "commit", "-m", f"Update .gitsubtrees path {source} -> {dest}"], cwd=repo_root)
 
     def cmd_pull(self):
         repo_root = self.get_repo_root()
