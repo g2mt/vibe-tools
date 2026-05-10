@@ -301,6 +301,8 @@ def main() -> None:
 
     program_data.start_ssh_tunnel()
 
+    # Restore cache thread
+
     if program_data.model and program_data.slot_save_path:
         def check_health_and_restore_cache():
             if program_data.check_health():
@@ -311,23 +313,6 @@ def main() -> None:
         )
         health_thread.start()
         program_data.threads.append(health_thread)
-
-    def monitor_tunnel() -> None:
-        """Monitor SSH tunnel process and restart if it stops unexpectedly"""
-        while not program_data.exit_requested:
-            time.sleep(60)
-            try:
-                requests.get(f"http://localhost:{program_data.forwarded_port}", timeout=5)
-            except Exception as e:
-                logging.warning(f"Health check error: {e}, restarting tunnel")
-                if program_data.process:
-                    program_data.process.terminate()
-                    try:
-                        program_data.process.wait(timeout=5)
-                    except subprocess.TimeoutExpired:
-                        program_data.process.kill()
-
-    monitor_thread = None
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
     while not program_data.exit_requested:
@@ -340,20 +325,6 @@ def main() -> None:
             if program_data.exit_requested:
                 logging.info("Exit requested, not restarting SSH tunnel")
                 break
-
-            # Restart the SSH tunnel
-            logging.info(f"Restarting SSH tunnel in {WAIT_SECS}...")
-            time.sleep(WAIT_SECS)
-            if not program_data.start_ssh_tunnel(True):
-                break
-
-            if monitor_thread is None:
-                monitor_thread = threading.Thread(
-                    target=monitor_tunnel,
-                    daemon=True
-                )
-                monitor_thread.start()
-                program_data.threads.append(monitor_thread)
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
