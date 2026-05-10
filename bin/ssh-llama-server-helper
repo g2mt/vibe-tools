@@ -11,12 +11,15 @@ import threading
 import time
 import requests
 import os
-import socket
-import errno
 import atexit
 from typing import List, Optional, Tuple
 
 WAIT_SECS = 3
+
+@dataclass
+class ExistingLlamaServer:
+    port: str
+    pid: str
 
 @dataclass
 class ProgramData:
@@ -24,36 +27,126 @@ class ProgramData:
     system: str
     forwarded_port: str
     server_args: List[str]
-    socket_path: str
     model: Optional[str] = None
     slot_save_path: Optional[str] = None
     process: Optional[subprocess.Popen] = None
     threads: List[threading.Thread] = None
-    no_conflict: bool = False
     exit_requested: bool = False
 
     def __post_init__(self):
         if self.threads is None:
             self.threads = []
 
-def run_ssh_command(host: str, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
-    """Run an SSH command with logging"""
-    logging.info(f"Running SSH command on {host}: {cmd}")
-    return subprocess.run(['ssh', host, cmd],
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout)
+    def save_model_cache(self) -> str:
+        """Save model cache to slot_save_path"""
+        if not (self.slot_save_path and self.model):
+            return "Error: No model or slot_save_path specified"
 
-def detect_system(host: str) -> str:
-    """Detect if remote system is Windows or Unix-like"""
-    try:
-        result = run_ssh_command(host, 'echo %OS%')
-        if 'Windows' in result.stdout:
-            return 'windows'
-    except Exception as e:
-        logging.warning(f"Failed to detect system on {host}: {e}")
-    return 'unix'
+        model_basename = os.path.basename(self.model)
+        cache_file = f"{model_basename}.bin"
+        save_url = f"http://localhost:{self.forwarded_port}/slots/0?action=save"
+        try:
+            response = requests.post(save_url, json={"filename": cache_file})
+            return response.text
+        except Exception as e:
+            return f'{{"error": "{str(e)}"}}'
 
+    def restore_model_cache(self) -> str:
+        """Restore model cache from slot_save_path if available"""
+        if not (self.slot_save_path and self.model):
+            return "Error: No model or slot_save_path specified"
+
+        model_basename = os.path.basename(self.model)
+        cache_file = f"{model_basename}.bin"
+
+        if self.system == 'windows':
+            check_cmd = f"if exist \"{self.slot_save_path}/{cache_file}\" (echo exists)"
+        else:
+            check_cmd = f"test -f \"{self.slot_save_path}/{cache_file}\" && echo exists"
+
+        try:
+            result = run_ssh_command(self.host, check_cmd)
+            if 'exists' in result.stdout:
+                restore_url = f"http://localhost:{self.forwarded_port}/slots/0?action=restore"
+                response = requests.post(restore_url, json={"filename": cache_file})
+                return response.text
+            return '{"error":"No cache file found"}'
+        except Exception as e:
+            return f'{{"error": "{str(e)}"}}'
+
+    def check_health(self) -> None:
+        """Check server health and restore model if needed"""
+        health_url = f"http://localhost:{self.forwarded_port}/health"
+
+        while True:
+            try:
+                response = requests.get(health_url, timeout=5)
+                if response.status_code == 200:
+                    break
+            except:
+                pass
+            time.sleep(5)
+
+        self.restore_model_cache()
+
+    def start_ssh_tunnel(self, close_if_not_running: bool = False) -> bool:
+        """Start the SSH tunnel process"""
+        binary_name = os.path.basename(self.server_args[0])
+        existing_server = check_running_process(self.host, self.system, binary_name, self.model)
+        if close_if_not_running and not existing_server:
+            return False
+
+        if existing_server:
+            logging.info(f"Found existing server running on port {existing_server.port} (pid {existing_server.pid})")
+            ssh_cmd = ['ssh', '-N', '-o', 'ServerAliveInterval=3600', '-L', f'{self.forwarded_port}:127.0.0.1:{existing_server.port}', self.host]
+
+            logging.info(f"Starting SSH tunnel: {ssh_cmd}")
+            self.process = subprocess.Popen(ssh_cmd)
+        else:
+            logging.info("No existing server found, starting new instance")
+
+            server_args_str = " ".join(self.server_args)
+
+            ssh_cmd = ['ssh', '-L', f'{self.forwarded_port}:127.0.0.1:{self.forwarded_port}',
+                      self.host, server_args_str]
+
+            logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
+            self.process = subprocess.Popen(ssh_cmd)
+
+        return True
+
+    def cleanup(self) -> None:
+        """Clean up all resources associated with program data"""
+        logging.info("Cleaning up program data")
+
+        # Kill the remote server process
+        binary_name = os.path.basename(self.server_args[0])
+        existing_server = check_running_process(self.host, self.system, binary_name, self.model)
+        if existing_server:
+            logging.info(f"Killing remote server process: {binary_name} (pid {existing_server.pid})")
+            kill_existing_process(existing_server, self.host, self.system)
+
+        # Terminate the SSH tunnel process
+        if self.process:
+            logging.info("Terminating SSH tunnel process")
+            try:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    logging.warning("Process didn't terminate gracefully, killing")
+                    self.process.kill()
+                    self.process.wait()
+            except Exception as e:
+                logging.error(f"Error terminating process: {e}")
+
+        # Clean up all threads
+        for thread in self.threads:
+            if thread.is_alive():
+                logging.debug(f"Waiting for thread {thread.name} to complete")
+                thread.join(timeout=1)
+
+#### CLI utils
 
 def extract_arg(args: List[str], flag: str) -> Optional[str]:
     """Extract argument value following specified flag
@@ -70,10 +163,35 @@ def extract_arg(args: List[str], flag: str) -> Optional[str]:
             return args[i + 1]
     return None
 
-def check_running_process(host: str, system: str, binary_name: str, model: Optional[str]) -> Optional[str]:
+#### SSH
+
+def run_ssh_command(host: str, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
+    """Run an SSH command with logging"""
+    logging.info(f"Running SSH command on {host}: {cmd}")
+    return subprocess.run(['ssh', host, cmd],
+                        capture_output=True,
+                        text=True,
+                        timeout=timeout)
+
+
+#### System detection
+
+def detect_system(host: str) -> str:
+    """Detect if remote system is Windows or Unix-like"""
+    try:
+        result = run_ssh_command(host, 'echo %OS%')
+        if 'Windows' in result.stdout:
+            return 'windows'
+    except Exception as e:
+        logging.warning(f"Failed to detect system on {host}: {e}")
+    return 'unix'
+
+#### Remote process management
+
+def check_running_process(host: str, system: str, binary_name: str, model: Optional[str]) -> Optional[ExistingLlamaServer]:
     """Check if the binary is running with the specified model"""
     if system == 'windows':
-        cmd = f'wmic process where "name like \'%{binary_name}\'" get name,commandline /format:csv'
+        cmd = f'wmic process where "name like \'%{binary_name}\'" get processid,commandline /format:csv'
         try:
             result = run_ssh_command(host, cmd)
             if binary_name in result.stdout:
@@ -83,13 +201,14 @@ def check_running_process(host: str, system: str, binary_name: str, model: Optio
                     if binary_name in line:
                         if model is None or model in line:
                             port_match = re.search(r'--port\s+(\d+)', line)
-                            if port_match:
-                                return port_match.group(1)
+                            pid_match = re.search(r',(\d+)$', line)
+                            if port_match and pid_match:
+                                return ExistingLlamaServer(port=port_match.group(1), pid=pid_match.group(1))
         except Exception as e:
             logging.warning(f"Error checking running process on Windows: {e}")
     else:
         # Use pgrep to find processes and ps to get command line
-        cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,command -h"
+        cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,args -h"
         try:
             result = run_ssh_command(host, cmd)
             if result.returncode == 0 and result.stdout.strip():
@@ -98,303 +217,43 @@ def check_running_process(host: str, system: str, binary_name: str, model: Optio
                 for line in lines:
                     line = line.strip()
                     if line and binary_name in line:
-                        if model is None or model in line:
-                            port_match = re.search(r'--port\s+(\d+)', line)
-                            if port_match:
-                                return port_match.group(1)
+                        parts = line.split(maxsplit=1)
+                        if len(parts) == 2:
+                            pid, args = parts
+                            if model is None or model in args:
+                                port_match = re.search(r'--port\s+(\d+)', args)
+                                if port_match:
+                                    return ExistingLlamaServer(port=port_match.group(1), pid=pid)
         except Exception as e:
             logging.warning(f"Error checking running process on Unix: {e}")
     return None
 
-def kill_existing_process(host: str, system: str, binary_name: str) -> None:
+
+def kill_existing_process(server: ExistingLlamaServer, host: str, system: str) -> None:
     """Kill existing server process"""
     if system == 'windows':
-        cmd = f'wmic process where "name like \'%{binary_name}\'" delete'
+        cmd = f'taskkill /F /PID {server.pid}'
     else:
-        cmd = f"pkill -f '{binary_name}$'"
+        cmd = f"kill {server.pid}"
 
     try:
         run_ssh_command(host, cmd)
     except Exception as e:
         logging.warning(f"Failed to kill process on {host}: {e}")
 
-def save_model_cache(program_data: ProgramData) -> str:
-    """Save model cache to slot_save_path"""
-    if not (program_data.slot_save_path and program_data.model):
-        return "Error: No model or slot_save_path specified"
-
-    model_basename = os.path.basename(program_data.model)
-    cache_file = f"{model_basename}.bin"
-    save_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=save"
-    try:
-        response = requests.post(save_url, json={"filename": cache_file})
-        return response.text
-    except Exception as e:
-        return f'{{"error": "{str(e)}"}}'
-
-def restore_model_cache(program_data: ProgramData) -> str:
-    """Restore model cache from slot_save_path if available"""
-    if not (program_data.slot_save_path and program_data.model):
-        return "Error: No model or slot_save_path specified"
-
-    model_basename = os.path.basename(program_data.model)
-    cache_file = f"{model_basename}.bin"
-
-    if program_data.system == 'windows':
-        check_cmd = f"if exist \"{program_data.slot_save_path}/{cache_file}\" (echo exists)"
-    else:
-        check_cmd = f"test -f \"{program_data.slot_save_path}/{cache_file}\" && echo exists"
-
-    try:
-        result = run_ssh_command(program_data.host, check_cmd)
-        if 'exists' in result.stdout:
-            restore_url = f"http://localhost:{program_data.forwarded_port}/slots/0?action=restore"
-            response = requests.post(restore_url, json={"filename": cache_file})
-            return response.text
-        return '{"error":"No cache file found"}'
-    except Exception as e:
-        return f'{{"error": "{str(e)}"}}'
-
-def check_health(program_data: ProgramData) -> None:
-    """Check server health and restore model if needed"""
-    health_url = f"http://localhost:{program_data.forwarded_port}/health"
-
-    while True:
-        try:
-            response = requests.get(health_url, timeout=5)
-            if response.status_code == 200:
-                break
-        except:
-            pass
-        time.sleep(5)
-
-    restore_model_cache(program_data)
-
-def create_socket_listener(program_data: ProgramData) -> None:
-    """Create a unix socket listener for stop commands"""
-    try:
-        os.unlink(program_data.socket_path)
-    except OSError:
-        if os.path.exists(program_data.socket_path):
-            raise
-
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.bind(program_data.socket_path)
-    sock.listen(1)
-
-    while True:
-        try:
-            connection, _ = sock.accept()
-            try:
-                data = connection.recv(1024).decode().strip()
-                if data == "stop":
-                    logging.info("Socket received stop signal, terminating process")
-                    program_data.exit_requested = True
-                    cleanup_program_data(program_data)
-                    break
-                elif data == "get-host":
-                    logging.info("Socket received get-host request")
-                    connection.sendall(f"{program_data.host}\n".encode())
-                elif data == "save":
-                    logging.info("Socket received save cache request")
-                    result = save_model_cache(program_data)
-                    connection.sendall(f"{result}\n".encode())
-                elif data == "load":
-                    logging.info("Socket received load cache request")
-                    result = restore_model_cache(program_data)
-                    connection.sendall(f"{result}\n".encode())
-                elif data == "reconnect":
-                    logging.info("Socket received reconnect request")
-
-                    # Restart the SSH tunnel
-                    if program_data.process:
-                        program_data.process.terminate()
-                        try:
-                            program_data.process.wait(timeout=5)
-                        except subprocess.TimeoutExpired:
-                            program_data.process.kill()
-                    start_ssh_tunnel(program_data)
-
-                    connection.sendall("ok\n".encode())
-            finally:
-                connection.close()
-        except Exception as e:
-            logging.error(f"Socket error: {e}")
-            break
-
-    sock.close()
-
-def start_ssh_tunnel(program_data: ProgramData, close_if_not_running: bool=False) -> bool:
-    """Start the SSH tunnel process"""
-    binary_name = os.path.basename(program_data.server_args[0])
-    running_port = check_running_process(program_data.host, program_data.system, binary_name, program_data.model)
-    if close_if_not_running and not running_port:
-        return False
-    
-    if running_port:
-        logging.info(f"Found existing server running on port {running_port}")
-        ssh_cmd = ['ssh', '-N', '-o', 'ServerAliveInterval=3600', '-L', f'{program_data.forwarded_port}:127.0.0.1:{running_port}', program_data.host]
-
-        logging.info(f"Starting SSH tunnel: {ssh_cmd}")
-        program_data.process = subprocess.Popen(ssh_cmd)
-    else:
-        logging.info("No existing server found, starting new instance")
-        if not program_data.no_conflict:
-            kill_existing_process(program_data.host, program_data.system, binary_name)
-
-        server_args_str = " ".join(program_data.server_args)
-
-        ssh_cmd = ['ssh', '-L', f'{program_data.forwarded_port}:127.0.0.1:{program_data.forwarded_port}',
-                  program_data.host, server_args_str]
-
-        logging.info(f"Starting SSH tunnel with command: {ssh_cmd}")
-        program_data.process = subprocess.Popen(ssh_cmd)
-
-    return True
-
-def wait_for_socket_cleanup(program_data: ProgramData, timeout: int = 10) -> None:
-    """Wait for existing socket file to be removed"""
-    start_time = time.time()
-    while os.path.exists(program_data.socket_path):
-        if time.time() - start_time > timeout:
-            logging.warning("Timeout waiting for socket cleanup, forcefully killing processes")
-            subprocess.run(['fuser', '-k', program_data.socket_path])
-            os.unlink(program_data.socket_path)
-            return
-        time.sleep(0.1)
-
-def send_socket_command(command: str, socket_path: str = os.path.expanduser("~/.ssh-llama-server-helper.socket")) -> Optional[str]:
-    """Send command to running instance via socket
-
-    Args:
-        command: The command to send ('stop', 'get-host', 'save', or 'load')
-        socket_path: Path to the Unix socket
-
-    Returns:
-        The response from socket if command was 'get-host', 'save' or 'load', else None
-    """
-    if not os.path.exists(socket_path):
-        return None
-
-    try:
-        sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        sock.connect(socket_path)
-        sock.sendall(f"{command}\n".encode())
-
-        # Read response line by line
-        response = b''
-        while True:
-            chunk = sock.recv(1024)
-            if not chunk:
-                break
-            response += chunk
-            if b'\n' in chunk:  # Stop at first newline
-                break
-        response = response.decode().strip()
-        sock.close()
-        return response
-    except socket.error as e:
-        if e.errno != errno.ECONNREFUSED:
-            raise
-        return None
-
-def cleanup_socket(socket_path: str) -> None:
-    """Cleanup socket file on exit"""
-    try:
-        if os.path.exists(socket_path):
-            os.unlink(socket_path)
-    except Exception as e:
-        logging.error(f"Error cleaning up socket: {e}")
-
-def cleanup_program_data(program_data: ProgramData) -> None:
-    """Clean up all resources associated with program data"""
-    logging.info("Cleaning up program data")
-    
-    # Terminate the SSH tunnel process
-    if program_data.process:
-        logging.info("Terminating SSH tunnel process")
-        try:
-            program_data.process.terminate()
-            try:
-                program_data.process.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                logging.warning("Process didn't terminate gracefully, killing")
-                program_data.process.kill()
-                program_data.process.wait()
-        except Exception as e:
-            logging.error(f"Error terminating process: {e}")
-    
-    # Clean up all threads
-    for thread in program_data.threads:
-        if thread.is_alive():
-            logging.debug(f"Waiting for thread {thread.name} to complete")
-            thread.join(timeout=1)
-    
-    # Clean up socket
-    cleanup_socket(program_data.socket_path)
 
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format='%(asctime)s - %(levelname)s - %(message)s'
     )
+    logging.info(f"(ssh-llama-server-helper pid={os.getpid()})")
 
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('--host', help='SSH host')
-    parser.add_argument('-k', '--kill', action='store_true', help='Stop running server')
-    parser.add_argument('--get-host', action='store_true', help='Get connected SSH host from running instance')
-    parser.add_argument('--save', action='store_true', help='Save current model state')
-    parser.add_argument('--load', action='store_true', help='Load saved model state')
-    parser.add_argument('--reconnect', action='store_true', help='Reconnect to running server')
-    parser.add_argument('--socket-path', default=os.path.expanduser("~/.ssh-llama-server-helper.socket"), 
-                       help='Path to Unix socket for inter-process communication (default: ~/.ssh-llama-server-helper.socket)')
-    parser.add_argument('--no-conflict', action='store_true', 
-                       help='Do not kill existing llama-server instances when starting a new model')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
-
-    if args.kill:
-        logging.info("Received kill command, sending stop signal")
-        send_socket_command("stop")
-        logging.info("Stop signal sent successfully")
-        return
-
-    if args.get_host:
-        logging.info("Requesting host from running instance")
-        host = send_socket_command("get-host")
-        if host:
-            print(host)
-            return
-        logging.error("No running instance found or failed to get host")
-        sys.exit(1)
-
-    if args.save:
-        logging.info("Sending save command to running instance")
-        response = send_socket_command("save")
-        if response:
-            print(response)
-            return
-        logging.error("No running instance found or failed to save")
-        sys.exit(1)
-
-    if args.load:
-        logging.info("Sending load command to running instance")
-        response = send_socket_command("load")
-        if response:
-            print(response)
-            return
-        logging.error("No running instance found or failed to load")
-        sys.exit(1)
-
-    if args.reconnect:
-        logging.info("Sending reconnect command to running instance")
-        response = send_socket_command("reconnect")
-        if response:
-            print("Reconnected successfully")
-            return
-        logging.error("No running instance found or failed to reconnect")
-        sys.exit(1)
 
     assert args.host is not None
     host: str = args.host
@@ -412,76 +271,30 @@ def main() -> None:
         model=extract_arg(server_args, '-m'),
         slot_save_path=extract_arg(server_args, '--slot-save-path'),
         server_args=server_args,
-        socket_path=args.socket_path,
-        no_conflict=args.no_conflict,
     )
-
-    # Check for existing socket and wait for cleanup
-    if os.path.exists(program_data.socket_path):
-        logging.info("Existing socket found, checking if it's in use")
-        # Check if any process is using the socket
-        try:
-            result = subprocess.run(['lsof', program_data.socket_path], 
-                                  capture_output=True, text=True, timeout=5)
-            if result.returncode == 0 and result.stdout.strip():
-                logging.info("Socket is in use, sending stop signal")
-                send_socket_command("stop", program_data.socket_path)
-            else:
-                logging.info("Socket file exists but no process is using it, removing")
-                os.unlink(program_data.socket_path)
-        except (subprocess.TimeoutExpired, FileNotFoundError):
-            # lsof not available or timeout, just try to send stop signal
-            logging.info("lsof not available or timeout, sending stop signal")
-            send_socket_command("stop", program_data.socket_path)
-        except Exception as e:
-            logging.warning(f"Error checking socket usage: {e}")
-            send_socket_command("stop", program_data.socket_path)
-        
-        wait_for_socket_cleanup(program_data)
 
     logging.info(f"Forwarding port: {program_data.forwarded_port}")
     logging.info(f"Detected system type: {program_data.system}")
 
-    # Register cleanup functions here so that simple commands dont delete the socket
-    atexit.register(cleanup_socket, program_data.socket_path)
+    # Register cleanup function
+    atexit.register(program_data.cleanup)
 
-    binary_name = os.path.basename(program_data.server_args[0])
-    running_port: Optional[str] = check_running_process(program_data.host, program_data.system, binary_name, program_data.model)
-
-    if running_port:
-        logging.info(f"Found existing server running on port {running_port}")
-    elif program_data.no_conflict:
-        logging.info("No-conflict mode enabled, will not kill existing instances")
-    else:
-        # Only kill existing processes if not in no-conflict mode and no matching process found
-        logging.info("No existing server found, checking for conflicting instances")
-        kill_existing_process(program_data.host, program_data.system, binary_name)
-
-    start_ssh_tunnel(program_data)
+    program_data.start_ssh_tunnel()
 
     if program_data.model and program_data.slot_save_path:
         health_thread = threading.Thread(
-            target=check_health,
-            args=(program_data,),
+            target=program_data.check_health,
             daemon=True
         )
         health_thread.start()
         program_data.threads.append(health_thread)
 
-    socket_thread = threading.Thread(
-        target=create_socket_listener,
-        args=(program_data,),
-        daemon=True
-    )
-    socket_thread.start()
-    program_data.threads.append(socket_thread)
-
-    def monitor_tunnel(program_data: ProgramData) -> None:
+    def monitor_tunnel() -> None:
         """Monitor SSH tunnel process and restart if it stops unexpectedly"""
         while not program_data.exit_requested:
             time.sleep(60)
             try:
-                response = requests.get(f"http://localhost:{program_data.forwarded_port}", timeout=5)
+                requests.get(f"http://localhost:{program_data.forwarded_port}", timeout=5)
             except Exception as e:
                 logging.warning(f"Health check error: {e}, restarting tunnel")
                 if program_data.process:
@@ -508,13 +321,12 @@ def main() -> None:
             # Restart the SSH tunnel
             logging.info(f"Restarting SSH tunnel in {WAIT_SECS}...")
             time.sleep(WAIT_SECS)
-            if not start_ssh_tunnel(program_data, True):
+            if not program_data.start_ssh_tunnel(True):
                 break
 
             if monitor_thread is None:
                 monitor_thread = threading.Thread(
                     target=monitor_tunnel,
-                    args=(program_data,),
                     daemon=True
                 )
                 monitor_thread.start()
@@ -525,7 +337,7 @@ def main() -> None:
             if not program_data.exit_requested:
                 logging.info("Attempting to restart SSH tunnel after error")
                 try:
-                    start_ssh_tunnel(program_data)
+                    program_data.start_ssh_tunnel()
                 except Exception as restart_error:
                     logging.error(f"Failed to restart SSH tunnel: {restart_error}")
                     break
@@ -533,7 +345,8 @@ def main() -> None:
                 break
 
     logging.info("Shutting down helper")
-    cleanup_program_data(program_data)
+    program_data.cleanup()
+
 
 if __name__ == '__main__':
     main()
