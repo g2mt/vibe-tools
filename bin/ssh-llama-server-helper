@@ -32,10 +32,13 @@ class ProgramData:
     process: Optional[subprocess.Popen] = None
     threads: List[threading.Thread] = None
     exit_requested: bool = False
+    binary_name: Optional[str] = None
 
     def __post_init__(self):
         if self.threads is None:
             self.threads = []
+        if self.server_args:
+            self.binary_name = os.path.basename(self.server_args[0])
 
     #### SSH Commands
 
@@ -65,17 +68,17 @@ class ProgramData:
 
     #### Remote process management
 
-    def check_running_process(self, binary_name: str, model: Optional[str]) -> Optional[ExistingLlamaServer]:
+    def check_running_process(self, model: Optional[str]) -> Optional[ExistingLlamaServer]:
         """Check if the binary is running with the specified model"""
         if self.system == 'windows':
-            cmd = f'wmic process where "name like \'%{binary_name}\'" get processid,commandline /format:csv'
+            cmd = f'wmic process where "name like \'{self.binary_name}%\'" get processid,commandline /format:csv'
             try:
                 result = self.run_ssh_command(cmd)
-                if binary_name in result.stdout:
+                if self.binary_name in result.stdout:
                     # Split output into lines and check each one
                     lines = result.stdout.strip().split('\n')
                     for line in lines:
-                        if binary_name in line:
+                        if self.binary_name in line:
                             if model is None or model in line:
                                 port_match = re.search(r'--port\s+(\d+)', line)
                                 pid_match = re.search(r',(\d+)$', line)
@@ -85,7 +88,7 @@ class ProgramData:
                 logging.warning(f"Error checking running process on Windows: {e}")
         else:
             # Use pgrep to find processes and ps to get command line
-            cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,args -h"
+            cmd = f"pgrep -f '{self.binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,args -h"
             try:
                 result = self.run_ssh_command(cmd)
                 if result.returncode == 0 and result.stdout.strip():
@@ -93,7 +96,7 @@ class ProgramData:
                     lines = result.stdout.strip().split('\n')
                     for line in lines:
                         line = line.strip()
-                        if line and binary_name in line:
+                        if line and self.binary_name in line:
                             parts = line.split(maxsplit=1)
                             if len(parts) == 2:
                                 pid, args = parts
@@ -173,8 +176,7 @@ class ProgramData:
 
     def start_ssh_tunnel(self, close_if_not_running: bool = False) -> bool:
         """Start the SSH tunnel process"""
-        binary_name = os.path.basename(self.server_args[0])
-        existing_server = self.check_running_process(binary_name, self.model)
+        existing_server = self.check_running_process(self.model)
         if close_if_not_running and not existing_server:
             return False
 
@@ -202,10 +204,9 @@ class ProgramData:
         logging.info("Cleaning up program data")
 
         # Kill the remote server process
-        binary_name = os.path.basename(self.server_args[0])
-        existing_server = self.check_running_process(binary_name, self.model)
+        existing_server = self.check_running_process(self.model)
         if existing_server:
-            logging.info(f"Killing remote server process: {binary_name} (pid {existing_server.pid})")
+            logging.info(f"Killing remote server process: {self.binary_name} (pid {existing_server.pid})")
             self.kill_existing_process(existing_server)
 
         # Terminate the SSH tunnel process
