@@ -37,6 +37,88 @@ class ProgramData:
         if self.threads is None:
             self.threads = []
 
+    #### SSH Commands
+
+    def run_ssh_command(self, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
+        """Run an SSH command with logging"""
+        logging.info(f"Running SSH command on {self.host}: {cmd}")
+        return subprocess.run(['ssh', self.host, cmd],
+                            capture_output=True,
+                            text=True,
+                            timeout=timeout)
+
+    #### System detection
+
+    @staticmethod
+    def detect_system(host: str) -> str:
+        """Detect if remote system is Windows or Unix-like"""
+        try:
+            result = subprocess.run(['ssh', host, 'echo %OS%'],
+                                  capture_output=True,
+                                  text=True,
+                                  timeout=10)
+            if 'Windows' in result.stdout:
+                return 'windows'
+        except Exception as e:
+            logging.warning(f"Failed to detect system on {host}: {e}")
+        return 'unix'
+
+    #### Remote process management
+
+    def check_running_process(self, binary_name: str, model: Optional[str]) -> Optional[ExistingLlamaServer]:
+        """Check if the binary is running with the specified model"""
+        if self.system == 'windows':
+            cmd = f'wmic process where "name like \'%{binary_name}\'" get processid,commandline /format:csv'
+            try:
+                result = self.run_ssh_command(cmd)
+                if binary_name in result.stdout:
+                    # Split output into lines and check each one
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        if binary_name in line:
+                            if model is None or model in line:
+                                port_match = re.search(r'--port\s+(\d+)', line)
+                                pid_match = re.search(r',(\d+)$', line)
+                                if port_match and pid_match:
+                                    return ExistingLlamaServer(port=port_match.group(1), pid=pid_match.group(1))
+            except Exception as e:
+                logging.warning(f"Error checking running process on Windows: {e}")
+        else:
+            # Use pgrep to find processes and ps to get command line
+            cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,args -h"
+            try:
+                result = self.run_ssh_command(cmd)
+                if result.returncode == 0 and result.stdout.strip():
+                    # Split output into lines and check each one
+                    lines = result.stdout.strip().split('\n')
+                    for line in lines:
+                        line = line.strip()
+                        if line and binary_name in line:
+                            parts = line.split(maxsplit=1)
+                            if len(parts) == 2:
+                                pid, args = parts
+                                if model is None or model in args:
+                                    port_match = re.search(r'--port\s+(\d+)', args)
+                                    if port_match:
+                                        return ExistingLlamaServer(port=port_match.group(1), pid=pid)
+            except Exception as e:
+                logging.warning(f"Error checking running process on Unix: {e}")
+        return None
+
+    def kill_existing_process(self, server: ExistingLlamaServer) -> None:
+        """Kill existing server process"""
+        if self.system == 'windows':
+            cmd = f'taskkill /F /PID {server.pid}'
+        else:
+            cmd = f"kill {server.pid}"
+
+        try:
+            self.run_ssh_command(cmd)
+        except Exception as e:
+            logging.warning(f"Failed to kill process on {self.host}: {e}")
+
+    #### HTTP Requests
+
     def save_model_cache(self) -> str:
         """Save model cache to slot_save_path"""
         if not (self.slot_save_path and self.model):
@@ -65,7 +147,7 @@ class ProgramData:
             check_cmd = f"test -f \"{self.slot_save_path}/{cache_file}\" && echo exists"
 
         try:
-            result = run_ssh_command(self.host, check_cmd)
+            result = self.run_ssh_command(check_cmd)
             if 'exists' in result.stdout:
                 restore_url = f"http://localhost:{self.forwarded_port}/slots/0?action=restore"
                 response = requests.post(restore_url, json={"filename": cache_file})
@@ -92,7 +174,7 @@ class ProgramData:
     def start_ssh_tunnel(self, close_if_not_running: bool = False) -> bool:
         """Start the SSH tunnel process"""
         binary_name = os.path.basename(self.server_args[0])
-        existing_server = check_running_process(self.host, self.system, binary_name, self.model)
+        existing_server = self.check_running_process(binary_name, self.model)
         if close_if_not_running and not existing_server:
             return False
 
@@ -121,10 +203,10 @@ class ProgramData:
 
         # Kill the remote server process
         binary_name = os.path.basename(self.server_args[0])
-        existing_server = check_running_process(self.host, self.system, binary_name, self.model)
+        existing_server = self.check_running_process(binary_name, self.model)
         if existing_server:
             logging.info(f"Killing remote server process: {binary_name} (pid {existing_server.pid})")
-            kill_existing_process(existing_server, self.host, self.system)
+            self.kill_existing_process(existing_server)
 
         # Terminate the SSH tunnel process
         if self.process:
@@ -163,84 +245,6 @@ def extract_arg(args: List[str], flag: str) -> Optional[str]:
             return args[i + 1]
     return None
 
-#### SSH
-
-def run_ssh_command(host: str, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
-    """Run an SSH command with logging"""
-    logging.info(f"Running SSH command on {host}: {cmd}")
-    return subprocess.run(['ssh', host, cmd],
-                        capture_output=True,
-                        text=True,
-                        timeout=timeout)
-
-
-#### System detection
-
-def detect_system(host: str) -> str:
-    """Detect if remote system is Windows or Unix-like"""
-    try:
-        result = run_ssh_command(host, 'echo %OS%')
-        if 'Windows' in result.stdout:
-            return 'windows'
-    except Exception as e:
-        logging.warning(f"Failed to detect system on {host}: {e}")
-    return 'unix'
-
-#### Remote process management
-
-def check_running_process(host: str, system: str, binary_name: str, model: Optional[str]) -> Optional[ExistingLlamaServer]:
-    """Check if the binary is running with the specified model"""
-    if system == 'windows':
-        cmd = f'wmic process where "name like \'%{binary_name}\'" get processid,commandline /format:csv'
-        try:
-            result = run_ssh_command(host, cmd)
-            if binary_name in result.stdout:
-                # Split output into lines and check each one
-                lines = result.stdout.strip().split('\n')
-                for line in lines:
-                    if binary_name in line:
-                        if model is None or model in line:
-                            port_match = re.search(r'--port\s+(\d+)', line)
-                            pid_match = re.search(r',(\d+)$', line)
-                            if port_match and pid_match:
-                                return ExistingLlamaServer(port=port_match.group(1), pid=pid_match.group(1))
-        except Exception as e:
-            logging.warning(f"Error checking running process on Windows: {e}")
-    else:
-        # Use pgrep to find processes and ps to get command line
-        cmd = f"pgrep -f '{binary_name}$' | xargs -I {{}} ps -p {{}} -o pid,args -h"
-        try:
-            result = run_ssh_command(host, cmd)
-            if result.returncode == 0 and result.stdout.strip():
-                # Split output into lines and check each one
-                lines = result.stdout.strip().split('\n')
-                for line in lines:
-                    line = line.strip()
-                    if line and binary_name in line:
-                        parts = line.split(maxsplit=1)
-                        if len(parts) == 2:
-                            pid, args = parts
-                            if model is None or model in args:
-                                port_match = re.search(r'--port\s+(\d+)', args)
-                                if port_match:
-                                    return ExistingLlamaServer(port=port_match.group(1), pid=pid)
-        except Exception as e:
-            logging.warning(f"Error checking running process on Unix: {e}")
-    return None
-
-
-def kill_existing_process(server: ExistingLlamaServer, host: str, system: str) -> None:
-    """Kill existing server process"""
-    if system == 'windows':
-        cmd = f'taskkill /F /PID {server.pid}'
-    else:
-        cmd = f"kill {server.pid}"
-
-    try:
-        run_ssh_command(host, cmd)
-    except Exception as e:
-        logging.warning(f"Failed to kill process on {host}: {e}")
-
 
 def main() -> None:
     logging.basicConfig(
@@ -266,7 +270,7 @@ def main() -> None:
 
     program_data = ProgramData(
         host=host,
-        system=detect_system(host),
+        system=ProgramData.detect_system(host),
         forwarded_port=forwarded_port,
         model=extract_arg(server_args, '-m'),
         slot_save_path=extract_arg(server_args, '--slot-save-path'),
