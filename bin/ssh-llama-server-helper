@@ -160,7 +160,7 @@ class ProgramData:
         except Exception as e:
             return f'{{"error": "{str(e)}"}}'
 
-    def check_health(self) -> None:
+    def check_health(self) -> bool:
         """Check server health and restore model if needed"""
         health_url = f"http://localhost:{self.forwarded_port}/health"
 
@@ -168,12 +168,14 @@ class ProgramData:
             try:
                 response = requests.get(health_url, timeout=5)
                 if response.status_code == 200:
-                    break
+                    return True
             except:
                 pass
             time.sleep(5)
 
-        self.restore_model_cache()
+        return False
+
+    #### SSH Tunnel
 
     def start_ssh_tunnel(self, close_if_not_running: bool = False) -> bool:
         """Start the SSH tunnel process"""
@@ -256,6 +258,9 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description='SSH llama-server helper')
     parser.add_argument('--host', help='SSH host')
+    parser.add_argument('--system', nargs='?', const='', default='',
+                        choices=['windows', 'unix', ''],
+                        help='Remote system type (windows/unix). Default: auto-detect')
     # rest of the args (server_args) are parsed by parser.parse_known_args
 
     args, server_args = parser.parse_known_args()
@@ -269,9 +274,10 @@ def main() -> None:
         logging.error("No --port argument found in llama-server arguments")
         sys.exit(1)
 
+    system = args.system if args.system else ProgramData.detect_system(host)
     program_data = ProgramData(
         host=host,
-        system=ProgramData.detect_system(host),
+        system=system,
         forwarded_port=forwarded_port,
         model=extract_arg(server_args, '-m'),
         slot_save_path=extract_arg(server_args, '--slot-save-path'),
@@ -296,8 +302,11 @@ def main() -> None:
     program_data.start_ssh_tunnel()
 
     if program_data.model and program_data.slot_save_path:
+        def check_health_and_restore_cache():
+            if program_data.check_health():
+                program_data.restore_model_cache()
         health_thread = threading.Thread(
-            target=program_data.check_health,
+            target=check_health_and_restore_cache,
             daemon=True
         )
         health_thread.start()
