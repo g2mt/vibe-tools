@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 from dataclasses import dataclass
 import argparse
@@ -231,6 +231,16 @@ class ProgramData:
                 logging.debug(f"Waiting for thread {thread.name} to complete")
                 thread.join(timeout=1)
 
+    def force_exit_ssh_process(self) -> None:
+        """Force kill the SSH process immediately (used on SIGUSR1)"""
+        if self.process:
+            logging.info("Force killing SSH process")
+            try:
+                self.process.kill()
+                self.process.wait(timeout=3)
+            except Exception as e:
+                logging.error(f"Error force killing SSH process: {e}")
+
 #### CLI utils
 
 def extract_arg(args: List[str], flag: str) -> Optional[str]:
@@ -298,6 +308,14 @@ def main() -> None:
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, handle_sigterm)
+
+    def handle_sigusr1(signum, frame):
+        """Handle SIGUSR1 by force exiting SSH process and reloading tunnel"""
+        logging.info("Received SIGUSR1, force exiting SSH process and reloading tunnel")
+        program_data.force_exit_ssh_process()
+        program_data.start_ssh_tunnel()
+
+    signal.signal(signal.SIGUSR1, handle_sigusr1)
 
     program_data.start_ssh_tunnel()
 
