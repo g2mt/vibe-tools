@@ -313,7 +313,6 @@ def main() -> None:
         """Handle SIGUSR1 by force exiting SSH process and reloading tunnel"""
         logging.info("Received SIGUSR1, force exiting SSH process and reloading tunnel")
         program_data.force_exit_ssh_process()
-        program_data.start_ssh_tunnel()
 
     signal.signal(signal.SIGUSR1, handle_sigusr1)
 
@@ -325,12 +324,12 @@ def main() -> None:
         def check_health_and_restore_cache():
             if program_data.check_health():
                 program_data.restore_model_cache()
-        health_thread = threading.Thread(
+        restore_cache_thread = threading.Thread(
             target=check_health_and_restore_cache,
             daemon=True
         )
-        health_thread.start()
-        program_data.threads.append(health_thread)
+        restore_cache_thread.start()
+        program_data.threads.append(restore_cache_thread)
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
     while not program_data.exit_requested:
