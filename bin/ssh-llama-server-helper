@@ -235,7 +235,7 @@ class ProgramData:
                 self.process = None
                 return
             except Exception as e:
-                logging.error(f"Error terminating process: {e}")
+                logging.error(f"Error terminating process, force killing: {e}")
                 try:
                     self.process.kill()
                 except:
