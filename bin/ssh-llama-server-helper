@@ -43,7 +43,7 @@ class ProgramData:
 
     #### SSH Commands
 
-    def run_ssh_command(self, cmd: str, timeout: int = 10) -> subprocess.CompletedProcess:
+    def run_ssh_command(self, cmd: str, timeout: int = 5) -> subprocess.CompletedProcess:
         """Run an SSH command with logging"""
         logging.info(f"Running SSH command on {self.host}: {cmd}")
         return subprocess.run(['ssh', self.host, cmd],
@@ -226,6 +226,10 @@ class ProgramData:
         if self.process:
             logging.info("Terminating SSH tunnel process")
             try:
+                if self.process.poll() is not None:
+                    logging.info("Terminated")
+                    self.process = None
+                    return
                 self.process.terminate()
                 self.process.wait(timeout=3)
                 self.process = None
@@ -234,9 +238,9 @@ class ProgramData:
                 logging.error(f"Error terminating process: {e}")
                 try:
                     self.process.kill()
-                    self.process = None
                 except:
                     pass
+            self.process = None
 
 #### CLI utils
 
@@ -333,17 +337,13 @@ def main() -> None:
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
     while not program_data.exit_requested:
+        time.sleep(1)
         try:
             logging.info("Waiting for SSH tunnel process to complete")
             if program_data.process is None:
                 raise RuntimeError("process canceled")
             program_data.process.wait()
             logging.info("SSH tunnel process completed")
-
-            # Check if exit was requested during wait
-            if program_data.exit_requested:
-                logging.info("Exit requested, not restarting SSH tunnel")
-                break
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
@@ -352,14 +352,12 @@ def main() -> None:
                 logging.info("Attempting to restart SSH tunnel after error")
                 try:
                     program_data.start_ssh_tunnel()
+                    continue
                 except Exception as restart_error:
                     logging.error(f"Failed to restart SSH tunnel: {restart_error}")
-                    break
-            else:
-                break
+                    sys.exit(1)
 
-    logging.info("Shutting down helper")
-    program_data.cleanup()
+        sys.exit(1)
 
 
 if __name__ == '__main__':
