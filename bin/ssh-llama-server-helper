@@ -64,7 +64,7 @@ class ProgramData:
             if 'Windows' in result.stdout:
                 return 'windows'
         except Exception as e:
-            logging.warning(f"Failed to detect system on {host}: {e}")
+            raise RuntimeError(f"Failed to detect system on {host}: {e}")
         return 'unix'
 
     #### Remote process management
@@ -213,6 +213,16 @@ class ProgramData:
             self.kill_existing_process(existing_server)
 
         # Terminate the SSH tunnel process
+        self.force_exit_ssh_process()
+
+        # Clean up all threads
+        for thread in self.threads:
+            if thread.is_alive():
+                logging.debug(f"Waiting for thread {thread.name} to complete")
+                thread.join(timeout=1)
+
+    def force_exit_ssh_process(self) -> None:
+        """Force kill the SSH process immediately (used on SIGUSR1)"""
         if self.process:
             logging.info("Terminating SSH tunnel process")
             try:
@@ -224,24 +234,12 @@ class ProgramData:
                     self.process.kill()
             except Exception as e:
                 logging.error(f"Error terminating process: {e}")
-
-        # Clean up all threads
-        for thread in self.threads:
-            if thread.is_alive():
-                logging.debug(f"Waiting for thread {thread.name} to complete")
-                thread.join(timeout=1)
-
-    def force_exit_ssh_process(self) -> None:
-        """Force kill the SSH process immediately (used on SIGUSR1)"""
-        if self.process:
-            logging.info("Force killing SSH process")
-            try:
-                self.process.kill()
-                self.process.wait(timeout=3)
-            except Exception as e:
-                logging.error(f"Error force killing SSH process: {e}")
+            self.process = None
 
 #### CLI utils
+
+class ReloadTunnelException(Exception):
+    pass
 
 def extract_arg(args: List[str], flag: str) -> Optional[str]:
     """Extract argument value following specified flag
@@ -312,7 +310,7 @@ def main() -> None:
     def handle_sigusr1(signum, frame):
         """Handle SIGUSR1 by force exiting SSH process and reloading tunnel"""
         logging.info("Received SIGUSR1, force exiting SSH process and reloading tunnel")
-        program_data.force_exit_ssh_process()
+        raise ReloadTunnelException() # raises error in main while loop
 
     signal.signal(signal.SIGUSR1, handle_sigusr1)
 
@@ -335,6 +333,8 @@ def main() -> None:
     while not program_data.exit_requested:
         try:
             logging.info("Waiting for SSH tunnel process to complete")
+            if program_data.process is None:
+                raise RuntimeError("process canceled")
             program_data.process.wait()
             logging.info("SSH tunnel process completed")
 
@@ -345,6 +345,7 @@ def main() -> None:
 
         except Exception as e:
             logging.error(f"Error in main loop: {e}")
+            program_data.force_exit_ssh_process()
             if not program_data.exit_requested:
                 logging.info("Attempting to restart SSH tunnel after error")
                 try:
