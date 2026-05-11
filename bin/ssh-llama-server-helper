@@ -227,14 +227,16 @@ class ProgramData:
             logging.info("Terminating SSH tunnel process")
             try:
                 self.process.terminate()
-                try:
-                    self.process.wait(timeout=3)
-                except subprocess.TimeoutExpired:
-                    logging.warning("Process didn't terminate gracefully, killing")
-                    self.process.kill()
+                self.process.wait(timeout=3)
+                self.process = None
+                return
             except Exception as e:
                 logging.error(f"Error terminating process: {e}")
-            self.process = None
+                try:
+                    self.process.kill()
+                    self.process = None
+                except:
+                    pass
 
 #### CLI utils
 
