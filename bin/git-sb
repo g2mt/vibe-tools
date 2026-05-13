@@ -127,7 +127,8 @@ class Program:
                 return
         entry = Subtree(path=prefix, url=url, branch='master')
         entries.append(entry)
-        self.save_gitsubtrees(repo_root, entries)
+        if not self.args.dry_run:
+            self.save_gitsubtrees(repo_root, entries)
 
     def cmd_mv(self):
         repo_root = self.get_repo_root()
