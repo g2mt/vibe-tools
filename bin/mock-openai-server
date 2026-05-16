@@ -9,10 +9,12 @@ from http import HTTPStatus
 THINKING_TOKENS = [" I", " am", " thinking"]
 
 
-def make_handler(max_tokens):
+def make_handler(max_tokens, tps):
     _max_tokens = max_tokens
+    _sleep_time = 1.0 / tps
     class OpenAIHandler(BaseHTTPRequestHandler):
         max_tokens = _max_tokens
+        sleep_time = _sleep_time
 
         # ---- helpers ----
 
@@ -50,6 +52,7 @@ def make_handler(max_tokens):
         def _generate(self, n):
             for i in range(n):
                 yield THINKING_TOKENS[i % len(THINKING_TOKENS)]
+                time.sleep(self.sleep_time)
 
         # ---- HTTP verbs ----
 
@@ -120,8 +123,6 @@ def make_handler(max_tokens):
                         "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}],
                     }))
                     self.wfile.flush()
-                    time.sleep(0.02)
-
                 # finish
                 self.wfile.write(sse({
                     "id": rid, "object": "chat.completion.chunk", "created": ts,
@@ -188,11 +189,17 @@ def main():
         default=1000,
         help="Maximum number of thinking tokens to generate (default: 1000)",
     )
+    parser.add_argument(
+        "--tps",
+        type=float,
+        default=50.0,
+        help="Tokens per second generation rate (default: 50.0)",
+    )
     args = parser.parse_args()
 
-    server = HTTPServer((args.bind, args.port), make_handler(args.max_tokens))
+    server = HTTPServer((args.bind, args.port), make_handler(args.max_tokens, args.tps))
     print(f"mock-openai-server listening on {args.bind}:{args.port}", file=sys.stderr)
-    print(f"  model: mock-thinking  max_tokens: {args.max_tokens}", file=sys.stderr)
+    print(f"  model: mock-thinking  max_tokens: {args.max_tokens}  tps: {args.tps}", file=sys.stderr)
     print(f"  endpoints: GET  /v1/models  |  POST /v1/chat/completions", file=sys.stderr)
 
     try:
