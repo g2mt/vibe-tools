@@ -45,7 +45,13 @@ def make_handler(max_tokens, tps):
                         "object": "model",
                         "created": int(time.time()),
                         "owned_by": "mock",
-                    }
+                    },
+                    {
+                        "id": "mock-normal",
+                        "object": "model",
+                        "created": int(time.time()),
+                        "owned_by": "mock",
+                    },
                 ],
             }
 
@@ -65,7 +71,7 @@ def make_handler(max_tokens, tps):
             if self.path == "/v1/models":
                 self._send_json(200, self._model_list())
             elif self.path == "/" or self.path == "/health":
-                self._send_json(200, {"status": "ok", "model": "mock-thinking"})
+                self._send_json(200, {"status": "ok", "models": ["mock-thinking", "mock-normal"]})
             else:
                 self._send_json(404, {"error": "not found"})
 
@@ -92,6 +98,7 @@ def make_handler(max_tokens, tps):
 
         def _handle_stream(self, data):
             n = min(data.get("max_tokens", self.max_tokens), self.max_tokens)
+            model = data.get("model", "mock-thinking")
 
             self.send_response(HTTPStatus.OK)
             self._cors_headers()
@@ -111,22 +118,23 @@ def make_handler(max_tokens, tps):
                 # role-assistant preamble
                 self.wfile.write(sse({
                     "id": rid, "object": "chat.completion.chunk", "created": ts,
-                    "model": "mock-thinking",
+                    "model": model,
                     "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": None}],
                 }))
                 self.wfile.flush()
 
+                content_field = "content" if model == "mock-normal" else "reasoning_content"
                 for token in self._generate(n):
                     self.wfile.write(sse({
                         "id": rid, "object": "chat.completion.chunk", "created": ts,
-                        "model": "mock-thinking",
-                        "choices": [{"index": 0, "delta": {"content": token}, "finish_reason": None}],
+                        "model": model,
+                        "choices": [{"index": 0, "delta": {content_field: token}, "finish_reason": None}],
                     }))
                     self.wfile.flush()
                 # finish
                 self.wfile.write(sse({
                     "id": rid, "object": "chat.completion.chunk", "created": ts,
-                    "model": "mock-thinking",
+                    "model": model,
                     "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
                 }))
                 self.wfile.write(b"data: [DONE]\n\n")
@@ -139,13 +147,14 @@ def make_handler(max_tokens, tps):
 
         def _handle_non_stream(self, data):
             n = min(data.get("max_tokens", self.max_tokens), self.max_tokens)
+            model = data.get("model", "mock-thinking")
             content = "".join(self._generate(n))
 
             self._send_json(200, {
                 "id": f"chatcmpl-{int(time.time())}",
                 "object": "chat.completion",
                 "created": int(time.time()),
-                "model": "mock-thinking",
+                "model": model,
                 "choices": [{
                     "index": 0,
                     "message": {"role": "assistant", "content": content},
@@ -168,7 +177,7 @@ def make_handler(max_tokens, tps):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Mock OpenAI-compatible server that serves the 'mock-thinking' model."
+        description="Mock OpenAI-compatible server that serves 'mock-thinking' and 'mock-normal' models."
     )
     parser.add_argument(
         "-b",
@@ -199,7 +208,7 @@ def main():
 
     server = HTTPServer((args.bind, args.port), make_handler(args.max_tokens, args.tps))
     print(f"mock-openai-server listening on {args.bind}:{args.port}", file=sys.stderr)
-    print(f"  model: mock-thinking  max_tokens: {args.max_tokens}  tps: {args.tps}", file=sys.stderr)
+    print(f"  models: mock-thinking, mock-normal  max_tokens: {args.max_tokens}  tps: {args.tps}", file=sys.stderr)
     print(f"  endpoints: GET  /v1/models  |  POST /v1/chat/completions", file=sys.stderr)
 
     try:
