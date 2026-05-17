@@ -34,7 +34,20 @@ def make_handler(max_tokens, tps):
 
         def _read_body(self):
             length = int(self.headers.get("Content-Length", 0))
-            return self.rfile.read(length)
+            return self.rfile.read(length) if length else b""
+
+        @staticmethod
+        def _log_request(body_bytes, label="request"):
+            try:
+                parsed = json.loads(body_bytes) if body_bytes else {}
+                pretty = json.dumps(parsed, indent=2, ensure_ascii=False)
+            except json.JSONDecodeError:
+                pretty = body_bytes.decode("utf-8", errors="replace")
+            char_count = len(pretty)
+            est_tokens = char_count / 4
+            print(f"--- {label} JSON (chars={char_count}, ~{est_tokens:.0f} est. tokens) ---", file=sys.stderr)
+            print(pretty, file=sys.stderr)
+            print(f"--- end {label} JSON (chars={char_count}, ~{est_tokens:.0f} est. tokens) ---", file=sys.stderr)
 
         def _model_list(self):
             return {
@@ -81,6 +94,7 @@ def make_handler(max_tokens, tps):
                 return
 
             body = self._read_body()
+            self._log_request(body)
             try:
                 data = json.loads(body) if body else {}
             except json.JSONDecodeError:
