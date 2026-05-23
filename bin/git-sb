@@ -119,14 +119,16 @@ class Program:
             prefix = os.path.join(prefix, self.args.folder)
         else:
             prefix = os.path.join(prefix, Path(urlparse(url).path).name)
-        cmd_list = Subtree(prefix, url, 'master').get_squash_cmd('add', repo_root)
+        branch = self.args.branch
+        cmd_list = Subtree(prefix, url, branch).get_squash_cmd('add', repo_root)
         self.run_cmd(cmd_list, cwd=repo_root)
         entries = self.load_gitsubtrees(repo_root)
         for e in entries:
             if e.path == prefix:
                 print(f"{ANSI_GRAY}Entry already exists for path '{prefix}', not recording duplicate.{ANSI_RESET}", file=sys.stderr)
                 return
-        entry = Subtree(path=prefix, url=url, branch='master')
+        tags = self.args.tags if self.args.tags else []
+        entry = Subtree(path=prefix, url=url, branch=branch, tags=tags)
         entries.append(entry)
         if not self.args.dry_run:
             self.save_gitsubtrees(repo_root, entries)
@@ -238,6 +240,8 @@ def main():
     add_parser = subparsers.add_parser('add', help='Add a subtree')
     add_parser.add_argument('url', help='Repository URL')
     add_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (relative to current dir)')
+    add_parser.add_argument('-b', '--branch', default='master', help='Branch to clone (default: master)')
+    add_parser.add_argument('-t', '--tag', action='append', dest='tags', default=None, help='Tag to assign to this subtree (can be repeated)')
     pull_parser = subparsers.add_parser('pull', help='Pull subtree updates')
     pull_parser.add_argument('folder', nargs='?', default=None, help='Subdirectory (optional; if omitted, pull all)')
     pull_parser.add_argument('-t', '--tag', action='append', dest='tags', default=None, help='Only pull subtrees with this tag (can be repeated)')
