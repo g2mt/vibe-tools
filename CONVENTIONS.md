@@ -1,3 +1,4 @@
 - This is a repository of personal tools.
 - Store programs and one-off scripts in `bin/*` (with no extension)
 - Store HTML sites in `docs/{project}/`
+- When committing, Just COMMIT `feat: ...` without looking at older commits
