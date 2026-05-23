@@ -1,0 +1,134 @@
+#!/usr/bin/python3
+import csv
+import os
+from pathlib import Path
+import sys
+import argparse
+import subprocess
+
+ANSI_GRAY = "\033[90m"
+ANSI_RESET = "\033[0m"
+ANSI_RED = "\033[91m"
+ANSI_GREEN = "\033[92m"
+
+def get_config_path():
+    xdg_config = os.environ.get("XDG_CONFIG_HOME", os.path.join(Path.home(), ".config"))
+    return os.path.join(xdg_config, "gitbackup.txt")
+
+def run_cmd(cmd_list, cwd=None, capture=False):
+    kwargs = {}
+    if capture:
+        kwargs["capture_output"] = True
+        kwargs["text"] = True
+    try:
+        result = subprocess.run(cmd_list, cwd=cwd, check=True, **kwargs)
+        return result
+    except subprocess.CalledProcessError:
+        return None
+
+class Program:
+    def __init__(self, args):
+        self.args = args
+        self.config_path = get_config_path()
+
+    def cmd_add(self):
+        target = os.path.abspath(self.args.directory)
+
+        # Resolve to the top-level git directory
+        result = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=target, capture=True)
+        if not result or not result.stdout.strip():
+            print(f"{ANSI_RED}Error:{ANSI_RESET} '{target}' is not inside a git repository", file=sys.stderr)
+            sys.exit(1)
+        target = result.stdout.strip()
+
+        # Get current branch
+        branch_result = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=target, capture=True)
+        if not branch_result or not branch_result.stdout.strip():
+            print(f"{ANSI_RED}Error:{ANSI_RESET} could not determine current branch", file=sys.stderr)
+            sys.exit(1)
+        branch = branch_result.stdout.strip()
+
+        config_dir = os.path.dirname(self.config_path)
+        os.makedirs(config_dir, exist_ok=True)
+
+        entries = []
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", newline="") as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if row:
+                        p = row[0]
+                        b = row[1] if len(row) > 1 else ""
+                        entries.append((p, b))
+
+        if any(p == target for p, _ in entries):
+            print(f"'{target}' already in backup list", file=sys.stderr)
+            return
+
+        entries.append((target, branch))
+        with open(self.config_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            for p, br in entries:
+                writer.writerow([p, br])
+
+        print(f"{ANSI_GREEN}Added{ANSI_RESET} {target} (branch: {branch})")
+
+    def cmd_run(self):
+        if not os.path.exists(self.config_path):
+            print(f"Backup list not found at {self.config_path}", file=sys.stderr)
+            return
+
+        with open(self.config_path, "r", newline="") as f:
+            reader = csv.reader(f)
+            repos = [(row[0], row[1] if len(row) > 1 else "") for row in reader if row]
+
+        for repo, branch in repos:
+            # Resolve to top-level git directory (handles subdirs and worktrees)
+            toplevel = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=repo, capture=True)
+            if not toplevel or not toplevel.stdout.strip():
+                print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (not a git repository)")
+                continue
+            repo = toplevel.stdout.strip()
+
+            if not branch:
+                print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (no branch in csv)")
+                continue
+
+            # Check if backup/<branch> already matches
+            head_commit = run_cmd(["git", "rev-parse", branch], cwd=repo, capture=True)
+            if not head_commit or not head_commit.stdout.strip():
+                print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (branch '{branch}' not found)")
+                continue
+            head_commit = head_commit.stdout.strip()
+
+            backup_ref = f"backup/{branch}"
+            backup_result = run_cmd(["git", "rev-parse", backup_ref], cwd=repo, capture=True)
+
+            if backup_result and backup_result.stdout.strip() == head_commit:
+                print(f"{ANSI_GREEN}OK{ANSI_RESET}   {repo} ({branch})")
+                continue
+
+            print(f"{ANSI_GRAY}PUSH{ANSI_RESET}  {repo} ({branch})")
+            run_cmd(["git", "push", "-u", "backup", branch], cwd=repo)
+
+    def execute(self):
+        if self.args.command == "add":
+            self.cmd_add()
+        elif self.args.command == "run":
+            self.cmd_run()
+
+def main():
+    parser = argparse.ArgumentParser(description="Manage git backup repos")
+    subparsers = parser.add_subparsers(dest="command", required=True, help="sub-command help")
+
+    add_parser = subparsers.add_parser("add", help="Add a directory to the backup list")
+    add_parser.add_argument("directory", nargs="?", default=".", help="Directory to add (default: current dir)")
+
+    subparsers.add_parser("run", help="Check all backup repos against backup/master")
+
+    args = parser.parse_args()
+    program = Program(args)
+    program.execute()
+
+if __name__ == "__main__":
+    main()
