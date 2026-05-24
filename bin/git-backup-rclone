@@ -1,0 +1,324 @@
+#!/usr/bin/python3
+import csv
+import io
+import os
+import sys
+import argparse
+import subprocess
+import tempfile
+from pathlib import Path
+
+ANSI_GRAY = "\033[90m"
+ANSI_RESET = "\033[0m"
+ANSI_RED = "\033[91m"
+ANSI_GREEN = "\033[92m"
+
+
+def get_config_path():
+    xdg_config = os.environ.get("XDG_CONFIG_HOME", os.path.join(Path.home(), ".config"))
+    return os.path.join(xdg_config, "gitbackup.txt")
+
+
+def run_cmd(cmd_list, cwd=None, capture=False):
+    kwargs = {}
+    if capture:
+        kwargs["capture_output"] = True
+        kwargs["text"] = True
+    try:
+        result = subprocess.run(cmd_list, cwd=cwd, check=True, **kwargs)
+        return result
+    except subprocess.CalledProcessError:
+        return None
+
+
+def parse_refs(content):
+    """Parse CSV refs content into {branch: commit_hash} dict."""
+    refs = {}
+    reader = csv.reader(io.StringIO(content))
+    for row in reader:
+        if row and len(row) >= 2:
+            branch, commit = row[0], row[1]
+            refs[branch] = commit
+    return refs
+
+
+def format_refs(refs):
+    """Format {branch: commit_hash} dict into CSV refs content."""
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    for branch in sorted(refs):
+        writer.writerow([branch, refs[branch]])
+    return buf.getvalue()
+
+
+class Program:
+    def __init__(self, args):
+        self.args = args
+        self.config_path = get_config_path()
+
+        # Get remote path from git config
+        result = run_cmd(
+            ["git", "config", "--get", "git-backup-rclone.remote-path"],
+            capture=True,
+        )
+        if not result or not result.stdout.strip():
+            print(
+                f"{ANSI_RED}Error:{ANSI_RESET} "
+                f"git config 'git-backup-rclone.remote-path' not set",
+                file=sys.stderr,
+            )
+            print("  Set it with:", file=sys.stderr)
+            print(
+                "    git config --global git-backup-rclone.remote-path 'remote:/path/'",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        self.remote_path = result.stdout.strip().rstrip("/")
+
+    @staticmethod
+    def _git_dir(repo):
+        """Get the git directory path for a repo."""
+        result = run_cmd(["git", "rev-parse", "--git-dir"], cwd=repo, capture=True)
+        if not result or not result.stdout.strip():
+            return os.path.join(repo, ".git")
+        return result.stdout.strip()
+
+    def _read_cache(self, repo):
+        """Read local refs cache from .git/rclone-refs. Returns dict or None."""
+        cache_file = os.path.join(self._git_dir(repo), "rclone-refs")
+        if os.path.exists(cache_file):
+            with open(cache_file, "r") as f:
+                return parse_refs(f.read())
+        return None
+
+    def _write_cache(self, repo, refs):
+        """Write local refs cache to .git/rclone-refs."""
+        cache_file = os.path.join(self._git_dir(repo), "rclone-refs")
+        with open(cache_file, "w", newline="") as f:
+            f.write(format_refs(refs))
+
+    def _get_remote_refs(self, repo_basename, repo=None):
+        """Fetch refs CSV from remote. Returns {branch: commit_hash} or empty dict.
+        Uses local .git/rclone-refs cache when available; caches result on fetch."""
+        # Try local cache first
+        if repo:
+            cached = self._read_cache(repo)
+            if cached is not None:
+                return cached
+
+        # Fetch from remote
+        refs_path = f"{self.remote_path}/{repo_basename}/refs"
+        try:
+            result = subprocess.run(
+                ["rclone", "cat", refs_path],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                refs = parse_refs(result.stdout)
+                if repo:
+                    self._write_cache(repo, refs)
+                return refs
+        except Exception:
+            pass
+        return {}
+
+    def _put_remote_refs(self, repo_basename, refs, repo=None):
+        """Upload refs CSV dict to remote and update local cache."""
+        tmp_fd, tmp_path = tempfile.mkstemp()
+        os.close(tmp_fd)
+        try:
+            with open(tmp_path, "w", newline="") as f:
+                f.write(format_refs(refs))
+            refs_path = f"{self.remote_path}/{repo_basename}/refs"
+            run_cmd(["rclone", "copy", tmp_path, os.path.dirname(refs_path)])
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+        if repo:
+            self._write_cache(repo, refs)
+
+    @staticmethod
+    def _resolve_git_repo(path):
+        """Resolve path to git toplevel and current branch. Exits on failure."""
+        target = os.path.abspath(path)
+        result = run_cmd(["git", "rev-parse", "--show-toplevel"], cwd=target, capture=True)
+        if not result or not result.stdout.strip():
+            print(f"{ANSI_RED}Error:{ANSI_RESET} '{target}' is not inside a git repository", file=sys.stderr)
+            sys.exit(1)
+        repo = result.stdout.strip()
+
+        branch_result = run_cmd(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=repo, capture=True
+        )
+        if not branch_result or not branch_result.stdout.strip():
+            print(f"{ANSI_RED}Error:{ANSI_RESET} could not determine current branch", file=sys.stderr)
+            sys.exit(1)
+        return repo, branch_result.stdout.strip()
+
+    def cmd_add(self):
+        target, branch = self._resolve_git_repo(self.args.directory)
+
+        config_dir = os.path.dirname(self.config_path)
+        os.makedirs(config_dir, exist_ok=True)
+
+        entries = []
+        if os.path.exists(self.config_path):
+            with open(self.config_path, "r", newline="") as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    if row:
+                        p = row[0]
+                        b = row[1] if len(row) > 1 else ""
+                        entries.append((p, b))
+
+        if any(p == target for p, _ in entries):
+            print(f"'{target}' already in backup list", file=sys.stderr)
+            return
+
+        entries.append((target, branch))
+        with open(self.config_path, "w", newline="") as f:
+            writer = csv.writer(f)
+            for p, br in entries:
+                writer.writerow([p, br])
+
+        print(f"{ANSI_GREEN}Added{ANSI_RESET} {target} (branch: {branch})")
+
+    def _sync_repo(self, repo, branch, force=False):
+        """Sync a single repo/branch to rclone remote. Returns True on success, False on skip/error.
+        Caller must pass an already-resolved git toplevel path."""
+        if not branch:
+            print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (no branch specified)")
+            return False
+
+        # Get HEAD commit
+        head_commit = run_cmd(["git", "rev-parse", branch], cwd=repo, capture=True)
+        if not head_commit or not head_commit.stdout.strip():
+            print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (branch '{branch}' not found)")
+            return False
+        head_commit = head_commit.stdout.strip()
+
+        repo_basename = os.path.basename(repo)
+
+        # Check remote refs
+        remote_refs = self._get_remote_refs(repo_basename, repo=repo)
+        remote_commit = remote_refs.get(branch)
+
+        if remote_commit == head_commit:
+            if force:
+                print(f"{ANSI_GRAY}FORCE{ANSI_RESET} {repo} ({branch})")
+            else:
+                print(f"{ANSI_GREEN}OK{ANSI_RESET}   {repo} ({branch})")
+                return False
+
+        filename = f"{branch}.gzip"
+        dest_dir = f"{self.remote_path}/{repo_basename}"
+
+        print(f"{ANSI_GRAY}EXPORT{ANSI_RESET} {repo} ({branch}) -> {dest_dir}/{filename}")
+
+        # Create temp file for the gzip
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".gzip")
+        os.close(tmp_fd)
+
+        try:
+            # git fast-export --all | gzip > tmpfile
+            with open(tmp_path, "wb") as f:
+                proc1 = subprocess.Popen(
+                    ["git", "fast-export", "--all"],
+                    cwd=repo,
+                    stdout=subprocess.PIPE,
+                )
+                proc2 = subprocess.Popen(
+                    ["gzip"],
+                    stdin=proc1.stdout,
+                    stdout=f,
+                )
+                proc1.stdout.close()
+                ret2 = proc2.wait()
+                ret1 = proc1.wait()
+                if ret1 != 0 or ret2 != 0:
+                    print(f"{ANSI_RED}ERROR{ANSI_RESET} {repo}  (export/gzip failed)")
+                    return False
+
+            # Upload the gzip
+            upload = run_cmd(["rclone", "copy", tmp_path, dest_dir])
+            if not upload:
+                print(f"{ANSI_RED}ERROR{ANSI_RESET} {repo}  (rclone copy failed)")
+                return False
+
+            # Update remote refs CSV
+            remote_refs[branch] = head_commit
+            self._put_remote_refs(repo_basename, remote_refs, repo=repo)
+
+            print(f"{ANSI_GREEN}DONE{ANSI_RESET}  {repo} ({branch})")
+            return True
+
+        finally:
+            if os.path.exists(tmp_path):
+                os.unlink(tmp_path)
+
+    def cmd_sync(self):
+        target, branch = self._resolve_git_repo(self.args.directory)
+        self._sync_repo(target, branch, force=self.args.force)
+
+    def cmd_sync_all(self):
+        if not os.path.exists(self.config_path):
+            print(f"Backup list not found at {self.config_path}", file=sys.stderr)
+            return
+
+        with open(self.config_path, "r", newline="") as f:
+            reader = csv.reader(f)
+            repos = [(row[0], row[1] if len(row) > 1 else "") for row in reader if row]
+
+        for repo, branch in repos:
+            self._sync_repo(repo, branch, force=self.args.force)
+
+    def execute(self):
+        if self.args.command == "add":
+            self.cmd_add()
+        elif self.args.command == "sync":
+            self.cmd_sync()
+        elif self.args.command == "sync-all":
+            self.cmd_sync_all()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Backup git repos to rclone remote via fast-export"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True, help="sub-command help")
+
+    add_parser = subparsers.add_parser("add", help="Add a directory to the backup list")
+    add_parser.add_argument(
+        "directory", nargs="?", default=".",
+        help="Directory to add (default: current dir)",
+    )
+
+    sync_parser = subparsers.add_parser(
+        "sync", help="Export current repo and upload to rclone remote"
+    )
+    sync_parser.add_argument(
+        "directory", nargs="?", default=".",
+        help="Directory to sync (default: current dir)",
+    )
+    sync_parser.add_argument(
+        "-f", "--force", action="store_true",
+        help="Force upload even if remote ref matches",
+    )
+
+    sync_all_parser = subparsers.add_parser(
+        "sync-all", help="Export all repos from backup list and upload to rclone remote"
+    )
+    sync_all_parser.add_argument(
+        "-f", "--force", action="store_true",
+        help="Force upload even if remote ref matches",
+    )
+
+    args = parser.parse_args()
+    program = Program(args)
+    program.execute()
+
+
+if __name__ == "__main__":
+    main()
