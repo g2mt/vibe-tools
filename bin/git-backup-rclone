@@ -97,11 +97,12 @@ class Program:
         with open(cache_file, "w", newline="") as f:
             f.write(format_refs(refs))
 
-    def _get_remote_refs(self, repo_basename, repo=None):
+    def _get_remote_refs(self, repo_basename, repo=None, force=False):
         """Fetch refs CSV from remote. Returns {branch: commit_hash} or empty dict.
-        Uses local .git/rclone-refs cache when available; caches result on fetch."""
-        # Try local cache first
-        if repo:
+        Uses local .git/rclone-refs cache when available (skipped if force=True);
+        caches result on fetch."""
+        # Try local cache first (skip if force=True)
+        if not force and repo:
             cached = self._read_cache(repo)
             if cached is not None:
                 return cached
@@ -131,7 +132,7 @@ class Program:
             with open(tmp_path, "w", newline="") as f:
                 f.write(format_refs(refs))
             refs_path = f"{self.remote_path}/{repo_basename}/refs"
-            run_cmd(["rclone", "copy", tmp_path, os.path.dirname(refs_path)])
+            run_cmd(["rclone", "copyto", tmp_path, refs_path])
         finally:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
@@ -202,7 +203,7 @@ class Program:
         repo_basename = os.path.basename(repo)
 
         # Check remote refs
-        remote_refs = self._get_remote_refs(repo_basename, repo=repo)
+        remote_refs = self._get_remote_refs(repo_basename, repo=repo, force=force)
         remote_commit = remote_refs.get(branch)
 
         if remote_commit == head_commit:
@@ -214,6 +215,7 @@ class Program:
 
         filename = f"{branch}.gzip"
         dest_dir = f"{self.remote_path}/{repo_basename}"
+        dest_path = f"{dest_dir}/{filename}"
 
         print(f"{ANSI_GRAY}EXPORT{ANSI_RESET} {repo} ({branch}) -> {dest_dir}/{filename}")
 
@@ -242,7 +244,7 @@ class Program:
                     return False
 
             # Upload the gzip
-            upload = run_cmd(["rclone", "copy", tmp_path, dest_dir])
+            upload = run_cmd(["rclone", "copyto", tmp_path, dest_path])
             if not upload:
                 print(f"{ANSI_RED}ERROR{ANSI_RESET} {repo}  (rclone copy failed)")
                 return False
