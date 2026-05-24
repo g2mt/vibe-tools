@@ -8,6 +8,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+DRY_RUN = False
+
 ANSI_GRAY = "\033[90m"
 ANSI_RESET = "\033[0m"
 ANSI_RED = "\033[91m"
@@ -20,6 +22,10 @@ def get_config_path():
 
 
 def run_cmd(cmd_list, cwd=None, capture=False):
+    if DRY_RUN:
+        cwd_str = f" (cwd={cwd})" if cwd else ""
+        print(f"{ANSI_GRAY}DRYRUN  {' '.join(cmd_list)}{cwd_str}{ANSI_RESET}")
+        return subprocess.CompletedProcess(cmd_list, returncode=0, stdout="", stderr="")
     kwargs = {}
     if capture:
         kwargs["capture_output"] = True
@@ -58,6 +64,10 @@ class Program:
         self.args = args
         self.config_path = get_config_path()
 
+        if DRY_RUN:
+            self.remote_path = "<remote-path>"
+            return
+
         result = run_cmd(
             ["git", "config", "--get", "git-backup-rclone.remote-path"],
             capture=True,
@@ -89,6 +99,9 @@ class Program:
         return entries
 
     def _write_config(self, entries):
+        if DRY_RUN:
+            print(f"{ANSI_GRAY}DRYRUN  skipping write to {self.config_path}{ANSI_RESET}")
+            return
         os.makedirs(os.path.dirname(self.config_path), exist_ok=True)
         with open(self.config_path, "w", newline="") as f:
             writer = csv.writer(f)
@@ -131,6 +144,10 @@ class Program:
         return None
 
     def _write_cache(self, repo, refs):
+        if DRY_RUN:
+            cache_file = os.path.join(repo, ".git", "rclone-refs")
+            print(f"{ANSI_GRAY}DRYRUN  skipping write to {cache_file}{ANSI_RESET}")
+            return
         cache_file = os.path.join(repo, ".git", "rclone-refs")
         print(cache_file)
         with open(cache_file, "w", newline="") as f:
@@ -143,19 +160,10 @@ class Program:
                 return cached
 
         refs_path = f"{self.remote_path}/{os.path.basename(repo)}/refs"
-        try:
-            result = subprocess.run(
-                    ["rclone", "cat", refs_path],
-                capture_output=True,
-                text=True,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                refs = parse_refs(result.stdout)
-                self._write_cache(repo, refs)
-                return refs
-        except Exception:
-            pass
-
+        result = run_cmd(["rclone", "cat", refs_path], capture=True)
+        if result and result.stdout.strip():
+            refs = parse_refs(result.stdout)
+            self._write_cache(repo, refs)
         self._write_cache(repo, {})
         return {}
 
@@ -188,12 +196,16 @@ class Program:
             print(f"{ANSI_GREEN}PULLED{ANSI_RESET} refs for {repo} ({branch})")
             return
 
-        head_commit = run_cmd(["git", "rev-parse", branch], cwd=repo, capture=True)
-        if not head_commit or not head_commit.stdout.strip():
-            print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (branch '{branch}' not found)")
-            return
+        if DRY_RUN:
+            print(f"{ANSI_GRAY}DRY_RUN{ANSI_RESET} set head_commit=<commit>")
+            head_commit="<commit>"
+        else:
+            head_commit = run_cmd(["git", "rev-parse", branch], cwd=repo, capture=True)
+            if not head_commit or not head_commit.stdout.strip():
+                print(f"{ANSI_RED}SKIP{ANSI_RESET} {repo}  (branch '{branch}' not found)")
+                return
+            head_commit = head_commit.stdout.strip()
 
-        head_commit = head_commit.stdout.strip()
         remote_refs = self._get_remote_refs(repo=repo, force=self.args.force)
         remote_commit = remote_refs.get(branch)
 
@@ -279,6 +291,8 @@ def main():
     parser = argparse.ArgumentParser(
         description="Backup git repos to rclone remote via fast-export"
     )
+    parser.add_argument("-d", "--dry-run", action="store_true",
+                        help="Show what would be done without actually doing it")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     add_parser = subparsers.add_parser("add", help="Add a directory to the backup list")
@@ -300,6 +314,9 @@ def main():
                                  help="Only pull remote refs to local cache, no export/upload")
 
     args = parser.parse_args()
+    if args.dry_run:
+        global DRY_RUN
+        DRY_RUN = True
     Program(args).execute()
 
 
