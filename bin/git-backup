@@ -112,7 +112,7 @@ class Program:
                     continue
 
             print(f"{ANSI_GRAY}PUSH{ANSI_RESET}  {repo} ({branch})")
-            run_cmd(["git", "push", "-u", "backup", branch], cwd=repo)
+            run_cmd(["git", "push", "--force", "-u", "backup", branch], cwd=repo)
 
     def execute(self):
         if self.args.command == "add":
