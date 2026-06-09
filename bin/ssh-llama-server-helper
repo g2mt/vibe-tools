@@ -345,13 +345,13 @@ def main() -> None:
             program_data.process.wait()
             logging.info("SSH tunnel process completed")
 
-        except Exception as e:
-            logging.error(f"Error in main loop: {e}")
+        except ReloadTunnelException:
             program_data.force_exit_ssh_process()
             if not program_data.exit_requested:
                 logging.info("Attempting to restart SSH tunnel after error")
                 try:
-                    program_data.start_ssh_tunnel()
+                    if not program_data.start_ssh_tunnel(True):
+                        sys.exit(1)
                     continue
                 except Exception as restart_error:
                     logging.error(f"Failed to restart SSH tunnel: {restart_error}")
