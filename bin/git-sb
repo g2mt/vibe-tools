@@ -60,7 +60,7 @@ class Program:
                 if 'path' not in entry or 'url' not in entry:
                     raise ValueError(f"Each entry must have 'path' and 'url' keys, got {entry}")
                 e = Subtree(
-                    path=entry['path'],
+                    path=os.path.normpath(entry['path']),
                     url=entry['url'],
                     branch=entry.get('branch', 'master'),
                     tags=entry.get('tags', [])
