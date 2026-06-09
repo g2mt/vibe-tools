@@ -6,30 +6,24 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
-	"sync"
 	"syscall"
 	"time"
 
 	"github.com/shirou/gopsutil/v4/process"
 )
 
-type ProcessStat struct {
-	PID  int32
-	Name string
-	CPU  float64
-}
-
-// limitProcess tracks a running limitcpu process for a given PID.
-type limitProcess struct {
-	cmd *exec.Cmd
+type Entry struct {
+	p       *process.Process
+	present bool
+	limiter *exec.Cmd
 }
 
 func main() {
 	match := flag.String("match", "", "regex to match process names")
 	threshold := flag.Float64("threshold", 100.0, "CPU % threshold above which to apply limiting")
 	limit := flag.Int("limit", 20, "CPU % limit per process (per core)")
-	interval := flag.Duration("interval", 1*time.Second, "sampling interval")
 	flag.Parse()
 
 	if *match == "" {
@@ -47,102 +41,106 @@ func main() {
 		log.Fatal("limitcpu not found in PATH")
 	}
 
-	// Map of PID -> running limitcpu process
-	mu := sync.Mutex{}
-	limiterMap := make(map[int32]*limitProcess)
+	const procsByPidCap = 4096
+
+	procsByPid := make(map[int32]*Entry, procsByPidCap)
+	defer func() {
+		for pid, entry := range procsByPid {
+			if entry.limiter != nil {
+				fmt.Printf("  stopping limiter for PID %d (process exited)\n", pid)
+				entry.limiter.Process.Signal(syscall.SIGTERM)
+				entry.limiter = nil
+			}
+		}
+	}()
 
 	fmt.Printf("autolimitcpu: monitoring processes matching %q (threshold: %.0f%%, limit: %d%%)\n",
 		*match, *threshold, *limit)
-	fmt.Println()
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
 	for {
+		select {
+		case sig := <-sigChan:
+			fmt.Printf("Interrupted by signal: %v.\n", sig)
+			return
+		case <-time.After(1 * time.Second):
+		}
+
+		// Mark all tracked processes as not present; fill in procsByPid from live procs.
+		for _, entry := range procsByPid {
+			entry.present = false
+		}
+
 		procs, err := process.Processes()
 		if err != nil {
 			log.Printf("Failed to retrieve processes: %v", err)
 			continue
 		}
 
-		statChan := make(chan ProcessStat, len(procs))
-		var wg sync.WaitGroup
-
 		for _, p := range procs {
-			wg.Add(1)
-			go func(proc *process.Process) {
-				defer wg.Done()
-
-				name, err := proc.Name()
-				if err != nil || !re.MatchString(name) {
-					return
-				}
-
-				cpuPercent, err := proc.Percent(*interval)
-				if err != nil {
-					return
-				}
-
-				statChan <- ProcessStat{
-					PID:  proc.Pid,
-					Name: name,
-					CPU:  cpuPercent,
-				}
-			}(p)
-		}
-
-		wg.Wait()
-		close(statChan)
-
-		var highCPU []ProcessStat
-		for stat := range statChan {
-			if stat.CPU >= *threshold {
-				highCPU = append(highCPU, stat)
+			entry, exists := procsByPid[p.Pid]
+			if exists {
+				entry.present = true
 			}
-		}
 
-		if len(highCPU) == 0 {
-			continue
-		}
-
-		mu.Lock()
-
-		// Clean up stale entries (limitcpu processes that have exited)
-		for pid, lp := range limiterMap {
-			err := lp.cmd.Process.Signal(syscall.Signal(0))
-			if err != nil {
-				// Process has exited, clean it up
-				fmt.Printf("  limitcpu for PID %d (old process exited)\n", pid)
-				delete(limiterMap, pid)
-			}
-		}
-
-		for _, stat := range highCPU {
-			// Check if we already have a limiter for this PID
-			if _, exists := limiterMap[stat.PID]; exists {
+			name, err := p.Name()
+			if err != nil || !re.MatchString(name) {
 				continue
 			}
 
-			// Spawn limitcpu
+			if !exists {
+				entry = &Entry{p: p, present: true}
+				procsByPid[p.Pid] = entry
+			}
+
+			cpuPercent, err := entry.p.Percent(0)
+			if err != nil {
+				continue
+			}
+
+			if cpuPercent < *threshold {
+				continue
+			}
+
+			// Spawn limitcpu if not already running
+			if entry.limiter != nil {
+				continue
+			}
+
 			fmt.Printf("limiting PID %d (%s) at %.1f%% -> %d%%\n",
-				stat.PID, stat.Name, stat.CPU, *limit)
+				p.Pid, name, cpuPercent, *limit)
 
 			cmd := exec.Command(
 				limitcpuBin,
-				"--pid", fmt.Sprintf("%d", stat.PID),
-				"--limit", fmt.Sprintf("%d", *limit),
+				"--monitor-forks",
+				"--foreground",
+				"-p", fmt.Sprintf("%d", p.Pid),
+				"-l", fmt.Sprintf("%d", *limit),
 			)
 			cmd.Stdout = os.Stdout
 			cmd.Stderr = os.Stderr
 			cmd.Stdin = os.Stdin
 
 			if err := cmd.Start(); err != nil {
-				fmt.Fprintf(os.Stderr, "  failed to start limitcpu for PID %d: %v\n", stat.PID, err)
+				fmt.Fprintf(os.Stderr, "  failed to start limitcpu for PID %d: %v\n", p.Pid, err)
 				continue
 			}
 
-			limiterMap[stat.PID] = &limitProcess{
-				cmd: cmd,
-			}
+			entry.limiter = cmd
 		}
 
-		mu.Unlock()
+		// Clean up stale entries and detect exited limiters
+		for pid, entry := range procsByPid {
+			if !entry.present {
+				if entry.limiter != nil {
+					fmt.Printf("  stopping limiter for PID %d (process exited)\n", pid)
+					entry.limiter.Process.Signal(syscall.SIGTERM)
+					entry.limiter = nil
+				}
+				delete(procsByPid, pid)
+			}
+		}
 	}
 }
