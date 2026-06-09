@@ -41,9 +41,7 @@ func main() {
 		log.Fatal("limitcpu not found in PATH")
 	}
 
-	const procsByPidCap = 4096
-
-	procsByPid := make(map[int32]*Entry, procsByPidCap)
+	procsByPid := make(map[int32]*Entry, 8)
 	defer func() {
 		for pid, entry := range procsByPid {
 			if entry.limiter != nil {
