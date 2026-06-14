@@ -336,8 +336,8 @@ def main() -> None:
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
     while not program_data.exit_requested:
-        time.sleep(1)
         try:
+            time.sleep(1)
             logging.info("Waiting for SSH tunnel process to complete")
             if program_data.process is None:
                 raise RuntimeError("process canceled")
