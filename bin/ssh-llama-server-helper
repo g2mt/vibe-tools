@@ -335,7 +335,7 @@ def main() -> None:
         program_data.threads.append(restore_cache_thread)
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
-    while:
+    while True:
         try:
             time.sleep(1)
             logging.info("Waiting for SSH tunnel process to complete")
