@@ -177,9 +177,12 @@ int main(int argc, char **argv) {
 
     // Object transform: pan * rotate(pitch, yaw)
     Model *model = (projMode == PROJ_SPHERE) ? &sphereModel : &cubeModel;
+    Matrix baseRot = (projMode == PROJ_SPHERE)
+                         ? MatrixRotate((Vector3){1, 0, 0}, -PI / 2)
+                         : MatrixIdentity();
     Matrix rot = MatrixRotateXYZ((Vector3){pitch, yaw, 0.0f});
     Matrix trans = MatrixTranslate(pan.x, pan.y, 0.0f);
-    model->transform = MatrixMultiply(rot, trans);
+    model->transform = MatrixMultiply(baseRot, MatrixMultiply(rot, trans));
 
     // Shader uniform
     int pm = projMode;
