@@ -10,11 +10,14 @@
 //   - Left click + drag : rotate central object
 //   - Shift + left drag : pan
 //   - Scroll wheel      : zoom
+//   - S                 : screenshot to current folder
+//   - Tab               : hide/show UI elements
 
 #include "raylib.h"
 #include "raymath.h"
 #include <math.h>
 #include <stdio.h>
+#include <time.h>
 
 // Projection modes
 #define PROJ_EQUIRECT 0
@@ -58,7 +61,7 @@ static const char *fsCode =
 "        // re-sample the equirectangular texture.\n"
 "        float yMerc = (uv.y - 0.5) * 2.0 * PI;\n"
 "        float lat = 2.0 * atan(exp(yMerc)) - PI/2.0;\n"
-"        uv.y = lat / PI + 0.5;\n"
+"        uv.y = 1.0 - (lat / PI + 0.5);\n"
 "    } else if (projMode == 2) {\n"
 "        // Sphere\n"
 "        uv = vec2(uv.y, uv.x); \n"
@@ -140,6 +143,8 @@ int main(int argc, char **argv) {
   float pitch = 0.0f;
   Vector2 pan = {0.0f, 0.0f};
   float zoom = 5.0f;
+  bool showUI = true;
+  bool projChanged = false;
 
   while (!WindowShouldClose()) {
     // ----- Input -------------------------------------------------------
@@ -154,6 +159,21 @@ int main(int argc, char **argv) {
         zoom = 1.6f;
       if (zoom > 20.0f)
         zoom = 20.0f;
+    }
+
+    // Tab: toggle UI visibility
+    if (IsKeyPressed(KEY_TAB))
+      showUI = !showUI;
+
+    // S: screenshot to current folder
+    if (IsKeyPressed(KEY_S) && !IsKeyDown(KEY_LEFT_CONTROL) &&
+        !IsKeyDown(KEY_RIGHT_CONTROL)) {
+      time_t now = time(NULL);
+      struct tm *t = localtime(&now);
+      char fname[64];
+      strftime(fname, sizeof(fname), "screenshot_%Y%m%d_%H%M%S.png", t);
+      TakeScreenshot(fname);
+      printf("Screenshot saved: %s\n", fname);
     }
 
     // Drag (only when starting below the toolbar)
@@ -196,24 +216,42 @@ int main(int argc, char **argv) {
     DrawModel(*model, (Vector3){0.0f, 0.0f, 0.0f}, 1.0f, WHITE);
     EndMode3D();
 
-    // Toolbar
-    DrawRectangle(0, 0, GetScreenWidth(), BAR_HEIGHT, (Color){40, 40, 45, 255});
+    // Toolbar (hidden when UI is toggled off with Tab)
+    if (showUI) {
+      DrawRectangle(0, 0, GetScreenWidth(), BAR_HEIGHT,
+                    (Color){40, 40, 45, 255});
 
-    float bw = 180.0f, bh = 32.0f, by = (BAR_HEIGHT - bh) / 2.0f, gap = 8.0f,
-          bx = 8.0f;
-    if (Button((Rectangle){bx, by, bw, bh}, "Equirectangular",
-               projMode == PROJ_EQUIRECT))
-      projMode = PROJ_EQUIRECT;
-    bx += bw + gap;
-    if (Button((Rectangle){bx, by, 120, bh}, "Mercator",
-               projMode == PROJ_MERCATOR))
-      projMode = PROJ_MERCATOR;
-    bx += 120 + gap;
-    if (Button((Rectangle){bx, by, 110, bh}, "Sphere", projMode == PROJ_SPHERE))
-      projMode = PROJ_SPHERE;
+      float bw = 180.0f, bh = 32.0f, by = (BAR_HEIGHT - bh) / 2.0f, gap = 8.0f,
+            bx = 8.0f;
+      if (Button((Rectangle){bx, by, bw, bh}, "Equirectangular",
+                 projMode == PROJ_EQUIRECT)) {
+        projMode = PROJ_EQUIRECT;
+        projChanged = true;
+      }
+      bx += bw + gap;
+      if (Button((Rectangle){bx, by, 120, bh}, "Mercator",
+                 projMode == PROJ_MERCATOR)) {
+        projMode = PROJ_MERCATOR;
+        projChanged = true;
+      }
+      bx += 120 + gap;
+      if (Button((Rectangle){bx, by, 110, bh}, "Sphere",
+                 projMode == PROJ_SPHERE)) {
+        projMode = PROJ_SPHERE;
+        projChanged = true;
+      }
 
-    DrawText("drag: rotate   shift+drag: pan   wheel: zoom", 8,
-             GetScreenHeight() - 22, 16, (Color){180, 180, 180, 255});
+      DrawText("drag: rotate   shift+drag: pan   wheel: zoom   S: screenshot   "
+               "Tab: toggle UI",
+               8, GetScreenHeight() - 22, 16, (Color){180, 180, 180, 255});
+    }
+
+    // Reset view when projection changes
+    if (projChanged) {
+      yaw = pitch = 0.0f;
+      pan = (Vector2){0};
+      projChanged = false;
+    }
 
     EndDrawing();
   }
