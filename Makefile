@@ -1,7 +1,7 @@
 DEBUG   ?= 0
 
 CFLAGS  := $(shell pkg-config --cflags raylib) -Wall -Wextra
-LDFLAGS := $(shell pkg-config --libs raylib)
+LDFLAGS := $(shell pkg-config --libs raylib) -lm
 TARGET  := globalize
 
 ifeq ($(DEBUG),1)
