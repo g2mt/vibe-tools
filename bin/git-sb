@@ -12,6 +12,7 @@ ANSI_GRAY = "\033[90m"
 ANSI_RESET ="\033[0m"
 ANSI_BOLD = "\033[1m"
 ANSI_CYAN = "\033[36m"
+ANSI_YELLOW = "\033[33m"
 
 @dataclass
 class Subtree:
@@ -220,6 +221,10 @@ class Program:
             paths = tag_to_paths[tag]
             paths_str = ", ".join(paths)
             print(f"{ANSI_CYAN}{tag}:{ANSI_RESET} {paths_str}")
+        # Show repos with no tags
+        no_tag_paths = ", ".join(e.path for e in entries if not e.tags)
+        if no_tag_paths:
+            print(f"{ANSI_YELLOW}no tags:{ANSI_RESET} {no_tag_paths}")
 
     def execute(self):
         if self.args.command == 'add':
