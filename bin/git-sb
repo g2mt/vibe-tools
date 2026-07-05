@@ -69,13 +69,13 @@ class Program:
                 entries.append(e)
             return entries
 
-    def save_gitsubtrees(self, repo_root, entries):
+    def save_gitsubtrees(self, repo_root, entries, msg="Update .gitsubtrees"):
         path = os.path.join(repo_root, '.gitsubtrees')
         dict_entries = [asdict(e) for e in entries]
         with open(path, 'w') as f:
             yaml.dump(dict_entries, f, default_flow_style=False)
         self.run_cmd(["git", "add", ".gitsubtrees"], cwd=repo_root)
-        self.run_cmd(["git", "commit", "-m", f"Update .gitsubtrees"], cwd=repo_root)
+        self.run_cmd(["git", "commit", "-m", msg], cwd=repo_root)
 
     def run_cmd(self, cmd_list, cwd=None):
         quiet = self.args.quiet
@@ -206,6 +206,23 @@ class Program:
                 cmd_list = e.get_squash_cmd('pull', repo_root)
                 self.run_cmd(cmd_list, cwd=repo_root)
 
+    def cmd_rm(self):
+        repo_root = self.get_repo_root()
+        path = os.path.relpath(self.args.path, repo_root)
+
+        entries = self.load_gitsubtrees(repo_root)
+        entry = next((e for e in entries if e.path == path), None)
+        if not entry:
+            raise ValueError(f"Path '{path}' is not registered as a subtree in .gitsubtrees")
+
+        entries.remove(entry)
+
+        if self.args.force:
+            self.run_cmd(["git", "rm", "-rf", path], cwd=repo_root)
+
+        if not self.args.dry_run:
+            self.save_gitsubtrees(repo_root, entries, msg=f"Remove {path}")
+
     def cmd_tags(self):
         repo_root = self.get_repo_root()
         entries = self.load_gitsubtrees(repo_root)
@@ -233,6 +250,8 @@ class Program:
             self.cmd_pull()
         elif self.args.command == 'mv':
             self.cmd_mv()
+        elif self.args.command == 'rm':
+            self.cmd_rm()
         elif self.args.command == 'tags':
             self.cmd_tags()
 
@@ -253,6 +272,9 @@ def main():
     mv_parser = subparsers.add_parser('mv', help='Move a subtree prefix')
     mv_parser.add_argument('source', help='Current subtree path')
     mv_parser.add_argument('dest', help='New subtree path')
+    rm_parser = subparsers.add_parser('rm', help='Remove a subtree')
+    rm_parser.add_argument('path', help='Subtree path to remove')
+    rm_parser.add_argument('-f', '--force', action='store_true', help='Also git rm -rf the directory')
     tags_parser = subparsers.add_parser('tags', help='Show list of tags and their directories')
     args = parser.parse_args()
     program = Program(args)
