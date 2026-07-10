@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integer / Float Visualizer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<p><a href="..">back</a></p>
+<h1>Integer / Float Visualizer</h1>
+
+<div id="app">
+  <div class="row" id="row-input">
+    <input id="num-input" type="text" placeholder="decimal / 0x hex / 0o octal" autocomplete="off" spellcheck="false">
+  </div>
+
+  <div class="row" id="row-bits">
+    <div id="bits-area"></div>
+  </div>
+
+  <div class="row" id="row-structure">
+    <div class="col col-structure">
+      <label id="auto-label"><input type="checkbox" id="auto-struct" checked> auto</label>
+      <div class="struct-grid">
+        <div class="struct-col">
+          <h3>unsigned</h3>
+          <label><input type="radio" name="struct" value="u8" checked> u8</label>
+          <label><input type="radio" name="struct" value="u16"> u16</label>
+          <label><input type="radio" name="struct" value="u32"> u32</label>
+          <label><input type="radio" name="struct" value="u64"> u64</label>
+        </div>
+        <div class="struct-col">
+          <h3>signed</h3>
+          <label><input type="radio" name="struct" value="i8"> i8</label>
+          <label><input type="radio" name="struct" value="i16"> i16</label>
+          <label><input type="radio" name="struct" value="i32"> i32</label>
+          <label><input type="radio" name="struct" value="i64"> i64</label>
+        </div>
+        <div class="struct-col">
+          <h3>float</h3>
+          <label><input type="radio" name="struct" value="f32"> f32</label>
+          <label><input type="radio" name="struct" value="f64"> f64</label>
+        </div>
+      </div>
+    </div>
+    <div class="col col-repr">
+      <ul id="repr-list"></ul>
+    </div>
+  </div>
+</div>
+
+<section id="manual">
+  <h2>manual</h2>
+  <div id="manual-cols">
+    <div class="manual-col manual-left">
+      <h3>input</h3>
+      <ul>
+        <li><code>123</code> — decimal integer (parsed as an int).</li>
+        <li><code>0xFF</code> — hexadecimal integer (prefix <code>0x</code>).</li>
+        <li><code>0o777</code> — octal integer (prefix <code>0o</code>).</li>
+        <li><code>1.5</code> <code>.5</code> <code>1.</code> — decimal float (parsed as an f64).</li>
+        <li><code>1e10</code> <code>1.5e-3</code> — scientific notation float (parsed as an f64).</li>
+        <li><code>1.5f</code> <code>3.14F</code> — float with <code>f</code>/<code>F</code> suffix is parsed as an f32.</li>
+        <li><code>1.0l</code> <code>1.0L</code> — float with <code>l</code>/<code>L</code> suffix is parsed as an f64.</li>
+        <li><code>42f</code> — a bare integer with <code>f</code> is treated as an f32.</li>
+        <li>An optional <code>+</code> / <code>-</code> sign may precede any number.</li>
+      </ul>
+      <p>If the input can't be parsed, the box turns red and the last result stays.</p>
+    </div>
+
+    <div class="manual-col manual-right">
+      <p>
+        A visualizer for the bit-level representation of integers and floats.
+        Type a number, pick a data structure, and inspect how its bits are laid
+        out and reinterpreted.
+      </p>
+
+      <h3>binary visualization</h3>
+      <ul>
+        <li>Each column is one bit; the index is shown underneath (bit 0 at the right).</li>
+        <li>Bits are grouped into bytes (8 bits) with spacing between groups.</li>
+        <li>The bit width is chosen by the data structure (or the number's highest set bit).</li>
+        <li>Click any bit to toggle it — the value updates and the input box follows.</li>
+      </ul>
+
+      <h3>data structure</h3>
+      <ul>
+        <li>Choose a structure (u/i 8–64, f32, f64) to reinterpret the bits.</li>
+        <li>Integer: the sign bit is highlighted.</li>
+        <li>Float: sign (red), exponent (blue), and fraction (green) bits are highlighted.</li>
+        <li><code>auto</code> (checked by default) picks a fitting structure as you type. Uncheck to lock it.</li>
+      </ul>
+
+      <h3>representation</h3>
+      <ul>
+        <li>Shows decimal, hex, octal (integers), exponent/fraction fields (floats), and little/big endian byte dumps.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<script src="script.js"></script>
+</body>
+</html>
