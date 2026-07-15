@@ -95,11 +95,20 @@ function structWidth(sel) { return STRUCT_INFO[sel].bytes * 8; }
 /* ---------- width from number ---------- */
 function widthForValue(value, isFloat) {
   if (isFloat) return value.width;
-  let v = value;
+  const v = value;
+  if (v >= 0n) {
+    // width from the position of the highest set '1' bit, rounded to nearest power of 2.
+    // e.g. highest bit at index 15 => 16-bit.
+    const bitLen = v === 0n ? 1 : v.toString(2).length; // == highestBitIndex + 1
+    for (const W of WIDTHS) {
+      if (bitLen <= W) return W;
+    }
+    return 64;
+  }
+  // negative: two's complement fit (needs the sign bit)
   for (const W of WIDTHS) {
     const lo = -(1n << BigInt(W - 1));
-    const hi =  (1n << BigInt(W - 1));
-    if (v >= lo && v < hi) return W;
+    if (v >= lo) return W;
   }
   return 64;
 }
