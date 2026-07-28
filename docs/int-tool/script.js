@@ -44,9 +44,10 @@ function parseInput(raw) {
   const text = raw.trim();
   if (!text) return null;
 
-  // hex / octal ints (no float variants here)
+  // hex / octal / binary ints (no float variants here)
   if (/^[+-]?0x[0-9a-f]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
   if (/^[+-]?0o[0-7]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
+  if (/^[+-]?0b[01]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
 
   // strip suffix
   let m = text.match(/^([+-]?(?:\d+\.\d*|\d+\.|\.\d*|\d+)(?:[eE][+-]?\d+)?)([fFlL]?)$/);
@@ -162,6 +163,10 @@ function bigToHexStr(big, width) {
 function bigToOctStr(big, width) {
   const mask = (1n << BigInt(width)) - 1n;
   return (big & mask).toString(8).padStart(Math.ceil(width / 3), "0");
+}
+function bigToBinStr(big, width) {
+  const mask = (1n << BigInt(width)) - 1n;
+  return (big & mask).toString(2).padStart(width, "0");
 }
 function endianBytes(bits, width, little) {
   const bytes = [];
@@ -289,6 +294,7 @@ function renderRepr(sel, width) {
     reprList.appendChild(li("decimal", valBig.toString(10)));
     reprList.appendChild(li("hex", "0x" + bigToHexStr(uBig, sw)));
     reprList.appendChild(li("octal", "0o" + bigToOctStr(uBig, sw)));
+    reprList.appendChild(li("binary", "0b" + bigToBinStr(uBig, sw)));
     reprList.appendChild(sep());
     reprList.appendChild(li("little endian", endianBytes(bits, sw, true)));
     reprList.appendChild(li("big endian", endianBytes(bits, sw, false)));

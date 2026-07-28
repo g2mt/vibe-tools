@@ -12,7 +12,7 @@
 
 <div id="app">
   <div class="row" id="row-input">
-    <input id="num-input" type="text" placeholder="decimal / 0x hex / 0o octal" autocomplete="off" spellcheck="false">
+    <input id="num-input" type="text" placeholder="decimal / 0x hex / 0o octal / 0b binary" autocomplete="off" spellcheck="false">
   </div>
 
   <div class="row" id="row-bits">
@@ -59,6 +59,7 @@
         <li><code>123</code> — decimal integer (parsed as an int).</li>
         <li><code>0xFF</code> — hexadecimal integer (prefix <code>0x</code>).</li>
         <li><code>0o777</code> — octal integer (prefix <code>0o</code>).</li>
+        <li><code>0b1010</code> — binary integer (prefix <code>0b</code>).</li>
         <li><code>1.5</code> <code>.5</code> <code>1.</code> — decimal float (parsed as an f64).</li>
         <li><code>1e10</code> <code>1.5e-3</code> — scientific notation float (parsed as an f64).</li>
         <li><code>1.5f</code> <code>3.14F</code> — float with <code>f</code>/<code>F</code> suffix is parsed as an f32.</li>
@@ -94,7 +95,7 @@
 
       <h3>representation</h3>
       <ul>
-        <li>Shows decimal, hex, octal (integers), exponent/fraction fields (floats), and little/big endian byte dumps.</li>
+        <li>Shows decimal, hex, octal, binary (integers), exponent/fraction fields (floats), and little/big endian byte dumps.</li>
       </ul>
     </div>
   </div>
