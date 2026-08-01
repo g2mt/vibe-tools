@@ -278,15 +278,18 @@ function highlight(sel, width) {
 }
 
 function sep() {
-  const el = document.createElement("li");
+  const el = document.createElement("tr");
   el.className = "sep";
+  const td = document.createElement("td");
+  td.colSpan = 2;
+  el.appendChild(td);
   return el;
 }
 
 function li(key, val) {
-  const el = document.createElement("li");
-  const k = document.createElement("span"); k.className = "k"; k.textContent = key;
-  const v = document.createElement("span"); v.className = "v"; v.textContent = val;
+  const el = document.createElement("tr");
+  const k = document.createElement("td"); k.className = "k"; k.textContent = key;
+  const v = document.createElement("td"); v.className = "v"; v.textContent = val;
   el.appendChild(k); el.appendChild(v);
   return el;
 }
