@@ -34,7 +34,8 @@ function setStruct(name) {
 
 // state.value: BigInt (int) or {kind:"float", num:number}
 // state.isFloat: bool
-let state = { value: null, isFloat: false };
+// state.format: "dec" | "hex" | "oct" | "bin"
+let state = { value: null, isFloat: false, format: "dec" };
 
 /* ---------- parsing ---------- */
 // grammar-based float/int parse. returns { value, isFloat } or null.
@@ -45,9 +46,9 @@ function parseInput(raw) {
   if (!text) return null;
 
   // hex / octal / binary ints (no float variants here)
-  if (/^[+-]?0x[0-9a-f]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
-  if (/^[+-]?0o[0-7]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
-  if (/^[+-]?0b[01]+$/i.test(text)) return { value: BigInt(text), isFloat: false };
+  if (/^[+-]?0x[0-9a-f]+$/i.test(text)) return { value: BigInt(text), isFloat: false, format: "hex" };
+  if (/^[+-]?0o[0-7]+$/i.test(text)) return { value: BigInt(text), isFloat: false, format: "oct" };
+  if (/^[+-]?0b[01]+$/i.test(text)) return { value: BigInt(text), isFloat: false, format: "bin" };
 
   // strip suffix
   let m = text.match(/^([+-]?(?:\d+\.\d*|\d+\.|\.\d*|\d+)(?:[eE][+-]?\d+)?)([fFlL]?)$/);
@@ -60,9 +61,9 @@ function parseInput(raw) {
   if (!hasFrac && !hasExp) {
     // no fractional part and no exponent => integer, unless suffix forces float
     if (suffix === "f" || suffix === "F") {
-      return { value: { kind: "float", num: parseFloat(body), width: 32 }, isFloat: true };
+      return { value: { kind: "float", num: parseFloat(body), width: 32 }, isFloat: true, format: "dec" };
     }
-    return { value: BigInt(body), isFloat: false };
+    return { value: BigInt(body), isFloat: false, format: "dec" };
   }
 
   // float: f/F => f32, l/L or none => f64
@@ -74,7 +75,7 @@ function parseInput(raw) {
   if (cleaned === ".") cleaned = "0.0";
   const num = parseFloat(cleaned);
   if (!Number.isFinite(num)) return null;
-  return { value: { kind: "float", num, width: is32 ? 32 : 64 }, isFloat: true };
+  return { value: { kind: "float", num, width: is32 ? 32 : 64 }, isFloat: true, format: "dec" };
 }
 
 /* ---------- structure info ---------- */
@@ -179,7 +180,7 @@ function endianBytes(bits, width, little) {
 }
 
 /* ---------- value -> text for input box ---------- */
-function valueToText(value, isFloat) {
+function valueToText(value, isFloat, format) {
   if (isFloat) {
     const f = value.num;
     if (Number.isNaN(f)) return "NaN";
@@ -187,7 +188,17 @@ function valueToText(value, isFloat) {
     if (Object.is(f, -0)) return "-0";
     return String(f);
   }
-  return value.toString(10);
+  const fmt = format || "dec";
+  // if current struct is unsigned, treat the value as unsigned
+  const info = STRUCT_INFO[structValue()];
+  const unsigned = info.kind === "int" && !info.signed;
+  const v = unsigned ? bitsToBigInt(valueToBits(value, false, structWidth(structValue())), structWidth(structValue()), false) : value;
+  switch (fmt) {
+    case "hex": return (v < 0n ? "-0x" + (-v).toString(16).toUpperCase() : "0x" + v.toString(16).toUpperCase());
+    case "oct": return (v < 0n ? "-0o" + (-v).toString(8) : "0o" + v.toString(8));
+    case "bin": return (v < 0n ? "-0b" + (-v).toString(2) : "0b" + v.toString(2));
+    default:   return v.toString(10);
+  }
 }
 
 /* ---------- rendering ---------- */
@@ -232,10 +243,10 @@ function toggleBit(bitIdx) {
   if (state.isFloat) {
     state.value = { kind: "float", num: bitsToFloat(newBits, state.value.width), width: state.value.width };
   } else {
-    state.value = bitsToBigInt(newBits, width, true);
+    state.value = bitsToBigInt(newBits, width, STRUCT_INFO[structValue()].signed);
   }
   // keep input box in sync without re-triggering parse
-  input.value = valueToText(state.value, state.isFloat);
+  input.value = valueToText(state.value, state.isFloat, state.format);
   input.classList.remove("invalid");
   render();
 }
@@ -341,6 +352,7 @@ input.addEventListener("input", () => {
   input.classList.remove("invalid");
   state.value = parsed.value;
   state.isFloat = parsed.isFloat;
+  state.format = parsed.format || "dec";
   if (autoCheckbox.checked) setStruct(autoStruct(state.value, state.isFloat));
   render();
 });
