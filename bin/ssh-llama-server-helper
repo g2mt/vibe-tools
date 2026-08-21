@@ -346,6 +346,20 @@ def main() -> None:
         program_data.threads.append(restore_cache_thread)
 
     # Main loop: restart SSH tunnel automatically unless exit is requested
+    restart_times: List[float] = []
+
+    def restart_ssh_tunnel() -> bool:
+        """Restart the tunnel unless it has restarted 5 times in 5 seconds."""
+        now = time.monotonic()
+        restart_times[:] = [timestamp for timestamp in restart_times
+                            if now - timestamp <= 5]
+        if len(restart_times) >= 5:
+            logging.error(
+                "SSH tunnel restarted 5 times within 5 seconds; exiting")
+            return False
+        restart_times.append(now)
+        return program_data.start_ssh_tunnel(True)
+
     while True:
         try:
             time.sleep(1)
@@ -357,14 +371,15 @@ def main() -> None:
 
             if program_data.exit_requested:
                 return
-            program_data.start_ssh_tunnel(True)
+            if not restart_ssh_tunnel():
+                return
 
         except ReloadTunnelException:
             program_data.force_exit_ssh_process()
             if not program_data.exit_requested:
                 logging.info("Attempting to restart SSH tunnel after error")
                 try:
-                    if not program_data.start_ssh_tunnel(True):
+                    if not restart_ssh_tunnel():
                         return
                     continue
                 except Exception as restart_error:
