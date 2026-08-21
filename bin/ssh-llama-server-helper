@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 import argparse
+import csv
+import io
 import logging
 import subprocess
 import sys
@@ -72,19 +74,28 @@ class ProgramData:
     def check_running_process(self, model: Optional[str]) -> Optional[ExistingLlamaServer]:
         """Check if the binary is running with the specified model"""
         if self.system == 'windows':
-            cmd = f'wmic process where "name like \'{self.binary_name}%\'" get processid,commandline /format:csv'
+            # WMIC is deprecated. Use PowerShell's CIM cmdlet instead and emit
+            # CSV so command lines containing spaces or commas are preserved.
+            cmd = ('powershell -NoProfile -NonInteractive -Command '
+                   '"Get-CimInstance Win32_Process | '
+                   'Select-Object Name,ProcessId,CommandLine | '
+                   'ConvertTo-Csv -NoTypeInformation"')
             try:
                 result = self.run_ssh_command(cmd)
-                if self.binary_name in result.stdout:
-                    # Split output into lines and check each one
-                    lines = result.stdout.strip().split('\n')
-                    for line in lines:
-                        if self.binary_name in line:
-                            if model is None or model in line:
-                                port_match = re.search(r'--port\s+(\d+)', line)
-                                pid_match = re.search(r',(\d+)$', line)
-                                if port_match and pid_match:
-                                    return ExistingLlamaServer(port=port_match.group(1), pid=pid_match.group(1))
+                rows = csv.reader(io.StringIO(result.stdout))
+                next(rows, None)  # column headers
+                for row in rows:
+                    if len(row) < 3:
+                        continue
+                    process_name, pid, command_line = row
+                    if not process_name.lower().startswith(self.binary_name.lower()):
+                        continue
+                    details = f'{process_name} {command_line}'
+                    if model is None or model in details:
+                        port_match = re.search(r'--port\s+(\d+)', details)
+                        if port_match and pid.isdigit():
+                            return ExistingLlamaServer(
+                                port=port_match.group(1), pid=pid)
             except Exception as e:
                 logging.warning(f"Error checking running process on Windows: {e}")
         else:
