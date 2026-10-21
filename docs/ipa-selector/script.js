@@ -2,6 +2,85 @@ const modeSelect = document.getElementById('mode-select');
 const filterCheckbox = document.getElementById('filter-highlighted');
 const clearBtn = document.getElementById('clear-highlighted');
 
+function clipboardAvailable() {
+    return typeof navigator !== 'undefined'
+        && navigator.clipboard
+        && typeof navigator.clipboard.readText === 'function';
+}
+
+function showCopyDialog(text) {
+    const overlay = document.createElement('div');
+    overlay.className = 'copy-dialog-overlay';
+
+    const dialog = document.createElement('div');
+    dialog.className = 'copy-dialog';
+
+    const message = document.createElement('p');
+    message.textContent = 'Clipboard access is not available. Copy the text below manually:';
+
+    const textarea = document.createElement('textarea');
+    textarea.className = 'copy-dialog-textarea';
+    textarea.value = text;
+    textarea.readOnly = true;
+
+    const buttonRow = document.createElement('div');
+    buttonRow.className = 'copy-dialog-buttons';
+
+    const copyBtn = document.createElement('button');
+    copyBtn.textContent = 'Try copy';
+    copyBtn.addEventListener('click', () => {
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            copyBtn.textContent = 'Copied!';
+        } catch (err) {
+            copyBtn.textContent = 'Copy failed';
+        }
+        setTimeout(() => { copyBtn.textContent = 'Try copy'; }, 1000);
+    });
+
+    const closeBtn = document.createElement('button');
+    closeBtn.textContent = 'Close';
+    closeBtn.addEventListener('click', () => overlay.remove());
+
+    buttonRow.appendChild(copyBtn);
+    buttonRow.appendChild(closeBtn);
+    dialog.appendChild(message);
+    dialog.appendChild(textarea);
+    dialog.appendChild(buttonRow);
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+
+    const onKeyDown = (e) => {
+        if (e.key === 'Escape') {
+            e.stopPropagation();
+            overlay.remove();
+        }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    overlay.addEventListener('click', (e) => {
+        if (e.target === overlay) overlay.remove();
+    });
+    const observer = new MutationObserver(() => {
+        if (!overlay.isConnected) {
+            observer.disconnect();
+            document.removeEventListener('keydown', onKeyDown);
+        }
+    });
+    observer.observe(document.body, { childList: true });
+    textarea.focus();
+    textarea.select();
+}
+
+function copyText(text) {
+    if (clipboardAvailable()) {
+        navigator.clipboard.writeText(text);
+    } else {
+        showCopyDialog(text);
+    }
+}
+
 document.querySelectorAll('a.phoneme').forEach(anchor => {
     anchor.href = '#';
     anchor.addEventListener('click', (e) => {
@@ -10,7 +89,7 @@ document.querySelectorAll('a.phoneme').forEach(anchor => {
         const text = anchor.textContent.trim();
         
         if (mode === 'copy') {
-            navigator.clipboard.writeText(text);
+            copyText(text);
             anchor.style.transform = 'translateY(-5px)';
             setTimeout(() => {
                 anchor.style.transform = 'translateY(0)';
@@ -237,9 +316,13 @@ function tableToHTML(table, filterEnabled, hasHighlights) {
 function copyRichText(table, filterEnabled, hasHighlights) {
     const cleanTable = buildCleanTable(table, filterEnabled, hasHighlights);
     const html = cleanTable.outerHTML;
-    const blob = new Blob([html], { type: 'text/html' });
-    const item = new ClipboardItem({ 'text/html': blob });
-    navigator.clipboard.write([item]);
+    if (clipboardAvailable() && typeof ClipboardItem === 'function') {
+        const blob = new Blob([html], { type: 'text/html' });
+        const item = new ClipboardItem({ 'text/html': blob });
+        navigator.clipboard.write([item]);
+    } else {
+        showCopyDialog(html);
+    }
 }
 
 document.querySelectorAll('.copy-table').forEach(container => {
@@ -251,7 +334,7 @@ document.querySelectorAll('.copy-table').forEach(container => {
         const hasHighlights = table.querySelector('.highlighted') !== null;
         const filterEnabled = filterCheckbox.checked;
         const markdown = tableToMarkdown(table, filterEnabled, hasHighlights);
-        navigator.clipboard.writeText(markdown);
+        copyText(markdown);
     });
 
     const htmlBtn = document.createElement('button');
@@ -260,7 +343,7 @@ document.querySelectorAll('.copy-table').forEach(container => {
         const hasHighlights = table.querySelector('.highlighted') !== null;
         const filterEnabled = filterCheckbox.checked;
         const html = tableToHTML(table, filterEnabled, hasHighlights);
-        navigator.clipboard.writeText(html);
+        copyText(html);
     });
 
     const richBtn = document.createElement('button');
