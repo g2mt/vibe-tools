@@ -1,0 +1,15 @@
+engines:
+  - name: local
+    shortcut: local
+    base_url: 'http://10.0.2.100:4433'
+    weight: 0.6
+
+    engine: json_engine
+    paging : false
+    search_url : 'http://10.0.2.100:4433/search?q={query}&format=json'
+    results_query: documents
+    url_query: url
+    title_query: title
+    content_query: metadata/description
+    thumbnail_query: ""
+
