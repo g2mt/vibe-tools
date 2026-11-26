@@ -34,8 +34,15 @@ func (value *scalarValue) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+type embeddingSettings struct {
+	LMHost        string `yaml:"lm_host"`
+	LMQueryPrefix string `yaml:"lm_query_prefix"`
+	LMDocPrefix   string `yaml:"lm_doc_prefix"`
+}
+
 type engineSettings struct {
 	Engines                []engineSettings       `yaml:"-"`
+	Embedding              embeddingSettings      `yaml:"-"`
 	Name                   string                 `yaml:"name"`
 	Engine                 string                 `yaml:"engine"`
 	SearchURL              string                 `yaml:"search_url"`
@@ -69,7 +76,8 @@ type engineSettings struct {
 
 func loadConfig(reader io.Reader) (engineSettings, error) {
 	var root struct {
-		Engines []yaml.Node `yaml:"engines"`
+		Embedding embeddingSettings `yaml:"embedding"`
+		Engines   []yaml.Node       `yaml:"engines"`
 	}
 	if err := yaml.NewDecoder(reader).Decode(&root); err != nil {
 		return engineSettings{}, fmt.Errorf("parse YAML config: %w", err)
@@ -99,6 +107,13 @@ func loadConfig(reader io.Reader) (engineSettings, error) {
 
 	settings := engines[0]
 	settings.Engines = engines
+	settings.Embedding = root.Embedding
+	if host := strings.TrimSpace(settings.Embedding.LMHost); host != "" {
+		parsedURL, err := url.Parse(host)
+		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil || parsedURL.RawQuery != "" || parsedURL.Fragment != "" {
+			return engineSettings{}, errors.New("embedding lm_host must be an HTTP or HTTPS URL without credentials, query, or fragment")
+		}
+	}
 	return settings, nil
 }
 

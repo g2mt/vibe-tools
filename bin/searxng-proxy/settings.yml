@@ -1,3 +1,7 @@
+embedding:
+  lm_host: "http://10.0.2.100:9000/upstream/embedding-model"
+  lm_query_prefix: "Search query: "
+
 engines:
   - name: local
     shortcut: local

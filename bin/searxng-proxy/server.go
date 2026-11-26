@@ -119,7 +119,7 @@ func (handler *searchHandler) search(ctx context.Context, params url.Values) ([]
 		}
 		results = append(results, engineResults...)
 	}
-	return results, nil
+	return rerankResults(ctx, handler.client, handler.settings.Embedding, params.Get("q"), results), nil
 }
 
 func (handler *searchHandler) searchEngine(ctx context.Context, params url.Values) ([]searchResult, error) {

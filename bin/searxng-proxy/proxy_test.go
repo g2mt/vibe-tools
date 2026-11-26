@@ -11,7 +11,11 @@ import (
 )
 
 func TestLoadConfigSelectsOnlyJSONEngine(t *testing.T) {
-	input := `engines:
+	input := `embedding:
+  lm_host: https://embeddings.example
+  lm_query_prefix: "Search: "
+  lm_doc_prefix: "Document: "
+engines:
   - engine: xpath
     search_url: 47
   - name: local
@@ -42,6 +46,9 @@ func TestLoadConfigSelectsOnlyJSONEngine(t *testing.T) {
 	}
 	if settings.ThumbnailQuery != "" {
 		t.Fatalf("false thumbnail_query should disable thumbnails, got %q", settings.ThumbnailQuery)
+	}
+	if settings.Embedding.LMHost != "https://embeddings.example" || settings.Embedding.LMQueryPrefix != "Search: " || settings.Embedding.LMDocPrefix != "Document: " {
+		t.Fatalf("unexpected embedding config: %#v", settings.Embedding)
 	}
 }
 
@@ -161,6 +168,62 @@ func TestSearchHandlerCombinesJSONEngineResultsInSettingsOrder(t *testing.T) {
 	}
 	if len(result.Results) != 2 || result.Results[0].Engine != "local" || result.Results[1].Engine != "other" {
 		t.Fatalf("expected results in engine order, got %#v", result.Results)
+	}
+}
+
+func TestSearchHandlerReranksResultsWithEmbeddings(t *testing.T) {
+	var receivedInputs []string
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/search":
+			_, _ = writer.Write([]byte(`{"documents":[{"title":"First","url":"https://first.example/","content":"not relevant"},{"title":"Second","url":"https://second.example/","content":"relevant"}]}`))
+		case "/embedding-model/v1/embeddings":
+			if request.Method != http.MethodPost {
+				t.Errorf("expected POST for embeddings, got %s", request.Method)
+			}
+			var body struct {
+				Input []string `json:"input"`
+			}
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Errorf("decode embedding request: %v", err)
+			}
+			receivedInputs = body.Input
+			_, _ = writer.Write([]byte(`{"data":[{"index":2,"embedding":[1,0]},{"index":0,"embedding":[1,0]},{"index":1,"embedding":[0,1]}]}`))
+		default:
+			t.Errorf("unexpected request path %q", request.URL.Path)
+			http.NotFound(writer, request)
+		}
+	}))
+	defer upstream.Close()
+
+	settings := engineSettings{
+		SearchURL:    upstream.URL + "/search?q={query}",
+		ResultsQuery: "documents",
+		URLQuery:     "url",
+		TitleQuery:   "title",
+		ContentQuery: "content",
+		Embedding: embeddingSettings{
+			LMHost:        upstream.URL + "/embedding-model",
+			LMQueryPrefix: "Search: ",
+			LMDocPrefix:   "Document: ",
+		},
+	}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/search?q=term", nil)
+	newSearchHandler(settings, newUpstreamClient()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d: %s", response.Code, response.Body.String())
+	}
+	if len(receivedInputs) != 3 || receivedInputs[0] != "Search: term" || !strings.Contains(receivedInputs[1], "Document: First first.example") {
+		t.Fatalf("unexpected embedding inputs: %#v", receivedInputs)
+	}
+	var result searchResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 2 || result.Results[0].Title != "Second" || result.Results[1].Title != "First" {
+		t.Fatalf("expected embedding-ranked results [Second First], got %#v", result.Results)
 	}
 }
 
