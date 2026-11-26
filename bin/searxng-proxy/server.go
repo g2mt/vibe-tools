@@ -109,6 +109,20 @@ func (handler *searchHandler) ServeHTTP(writer http.ResponseWriter, request *htt
 }
 
 func (handler *searchHandler) search(ctx context.Context, params url.Values) ([]searchResult, error) {
+	var results []searchResult
+	for _, settings := range handler.settings.configuredEngines() {
+		engineHandler := *handler
+		engineHandler.settings = settings
+		engineResults, err := engineHandler.searchEngine(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, engineResults...)
+	}
+	return results, nil
+}
+
+func (handler *searchHandler) searchEngine(ctx context.Context, params url.Values) ([]searchResult, error) {
 	values := handler.templateValues(params)
 	formattedURL, err := renderTemplate(handler.settings.SearchURL, values)
 	if err != nil {

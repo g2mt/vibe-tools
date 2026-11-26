@@ -13,3 +13,17 @@ engines:
     content_query: metadata/description
     thumbnail_query: ""
 
+  - name: other
+    shortcut: other
+    base_url: 'http://10.0.2.100:4434'
+    weight: 0.9
+
+    engine: json_engine
+    paging : false
+    search_url : 'http://10.0.2.100:4434/search?q={query}&format=json'
+    results_query: documents
+    url_query: url
+    title_query: title
+    content_query: metadata/description
+    thumbnail_query: ""
+

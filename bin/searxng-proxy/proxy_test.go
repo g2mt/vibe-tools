@@ -45,19 +45,31 @@ func TestLoadConfigSelectsOnlyJSONEngine(t *testing.T) {
 	}
 }
 
-func TestLoadConfigRejectsMultipleJSONEngines(t *testing.T) {
+func TestLoadConfigSelectsAllJSONEnginesInOrder(t *testing.T) {
 	input := `engines:
-  - engine: json_engine
-    search_url: https://one.example/?q={query}
+  - engine: xpath
+    search_url: 47
+  - name: local
+    engine: json_engine
+    search_url: 'https://one.example/search?q={query}'
     url_query: url
     title_query: title
-  - engine: json_engine
-    search_url: https://two.example/?q={query}
+  - name: other
+    engine: json_engine
+    search_url: 'https://two.example/search?q={query}'
     url_query: url
     title_query: title
 `
-	if _, err := loadConfig(strings.NewReader(input)); err == nil {
-		t.Fatal("expected multiple json_engine entries to fail")
+	settings, err := loadConfig(strings.NewReader(input))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engines := settings.configuredEngines()
+	if len(engines) != 2 {
+		t.Fatalf("expected two json_engine configs, got %d", len(engines))
+	}
+	if engines[0].Name != "local" || engines[1].Name != "other" {
+		t.Fatalf("expected engine order [local other], got [%s %s]", engines[0].Name, engines[1].Name)
 	}
 }
 
@@ -113,6 +125,42 @@ func TestSearchHandlerBuildsUpstreamRequestAndMapsResults(t *testing.T) {
 	}
 	if mapped.Thumbnail != "https://images.example/preview.jpg" {
 		t.Fatalf("thumbnail prefix was not applied: %q", mapped.Thumbnail)
+	}
+}
+
+func TestSearchHandlerCombinesJSONEngineResultsInSettingsOrder(t *testing.T) {
+	var calls []string
+	makeUpstream := func(name string) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			calls = append(calls, name)
+			_, _ = fmt.Fprintf(writer, `{"documents":[{"title":%q,"url":%q}]}`, name, "https://"+name+".example/")
+		}))
+	}
+	local := makeUpstream("local")
+	defer local.Close()
+	other := makeUpstream("other")
+	defer other.Close()
+
+	settings := engineSettings{Engines: []engineSettings{
+		{Name: "local", SearchURL: local.URL + "/search?q={query}", ResultsQuery: "documents", URLQuery: "url", TitleQuery: "title"},
+		{Name: "other", SearchURL: other.URL + "/search?q={query}", ResultsQuery: "documents", URLQuery: "url", TitleQuery: "title"},
+	}}
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/search?q=term", nil)
+	newSearchHandler(settings, newUpstreamClient()).ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("expected HTTP 200, got %d: %s", response.Code, response.Body.String())
+	}
+	if strings.Join(calls, ",") != "local,other" {
+		t.Fatalf("expected upstream calls in settings order, got %v", calls)
+	}
+	var result searchResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Results) != 2 || result.Results[0].Engine != "local" || result.Results[1].Engine != "other" {
+		t.Fatalf("expected results in engine order, got %#v", result.Results)
 	}
 }
 

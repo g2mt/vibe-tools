@@ -35,6 +35,7 @@ func (value *scalarValue) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type engineSettings struct {
+	Engines                []engineSettings       `yaml:"-"`
 	Name                   string                 `yaml:"name"`
 	Engine                 string                 `yaml:"engine"`
 	SearchURL              string                 `yaml:"search_url"`
@@ -74,33 +75,30 @@ func loadConfig(reader io.Reader) (engineSettings, error) {
 		return engineSettings{}, fmt.Errorf("parse YAML config: %w", err)
 	}
 
-	var selected *yaml.Node
+	var engines []engineSettings
 	for index := range root.Engines {
 		var header struct {
 			Engine string `yaml:"engine"`
 		}
-		if err := root.Engines[index].Decode(&header); err != nil {
+		if err := root.Engines[index].Decode(&header); err != nil || header.Engine != "json_engine" {
 			continue
 		}
-		if header.Engine != "json_engine" {
-			continue
+
+		var settings engineSettings
+		if err := root.Engines[index].Decode(&settings); err != nil {
+			return engineSettings{}, fmt.Errorf("parse json_engine config: %w", err)
 		}
-		if selected != nil {
-			return engineSettings{}, errors.New("config has multiple json_engine entries; expected exactly one")
+		if err := settings.validate(); err != nil {
+			return engineSettings{}, err
 		}
-		selected = &root.Engines[index]
+		engines = append(engines, settings)
 	}
-	if selected == nil {
+	if len(engines) == 0 {
 		return engineSettings{}, errors.New("config has no engine with engine: json_engine")
 	}
 
-	var settings engineSettings
-	if err := selected.Decode(&settings); err != nil {
-		return engineSettings{}, fmt.Errorf("parse json_engine config: %w", err)
-	}
-	if err := settings.validate(); err != nil {
-		return engineSettings{}, err
-	}
+	settings := engines[0]
+	settings.Engines = engines
 	return settings, nil
 }
 
@@ -150,6 +148,13 @@ func (settings engineSettings) validate() error {
 		}
 	}
 	return nil
+}
+
+func (settings engineSettings) configuredEngines() []engineSettings {
+	if len(settings.Engines) > 0 {
+		return settings.Engines
+	}
+	return []engineSettings{settings}
 }
 
 func (settings engineSettings) pageSize() int {
