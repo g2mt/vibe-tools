@@ -33,7 +33,7 @@ type rankedResult struct {
 }
 
 func rerankResults(ctx context.Context, client *http.Client, settings embeddingSettings, query string, results []searchResult) []searchResult {
-	if strings.TrimSpace(settings.LMHost) == "" || len(results) < 2 {
+	if strings.TrimSpace(settings.LMHost) == "" || len(results) == 0 || (len(results) < 2 && settings.LMThreshold == nil) {
 		return results
 	}
 
@@ -48,7 +48,7 @@ func rerankResults(ctx context.Context, client *http.Client, settings embeddingS
 		texts = append(texts, text)
 		validIndices = append(validIndices, index)
 	}
-	if len(validIndices) < 2 {
+	if len(validIndices) == 0 || (len(validIndices) < 2 && settings.LMThreshold == nil) {
 		return results
 	}
 
@@ -83,6 +83,9 @@ func rerankResults(ctx context.Context, client *http.Client, settings embeddingS
 
 	reranked := make([]searchResult, 0, len(results))
 	for _, result := range ranked {
+		if settings.LMThreshold != nil && 1-result.score > *settings.LMThreshold {
+			continue
+		}
 		reranked = append(reranked, results[result.index])
 	}
 	for index, result := range results {

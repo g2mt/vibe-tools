@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +16,7 @@ func TestLoadConfigSelectsOnlyJSONEngine(t *testing.T) {
   lm_host: https://embeddings.example
   lm_query_prefix: "Search: "
   lm_doc_prefix: "Document: "
+  lm_threshold: 0.5
 engines:
   - engine: xpath
     search_url: 47
@@ -47,7 +49,7 @@ engines:
 	if settings.ThumbnailQuery != "" {
 		t.Fatalf("false thumbnail_query should disable thumbnails, got %q", settings.ThumbnailQuery)
 	}
-	if settings.Embedding.LMHost != "https://embeddings.example" || settings.Embedding.LMQueryPrefix != "Search: " || settings.Embedding.LMDocPrefix != "Document: " {
+	if settings.Embedding.LMHost != "https://embeddings.example" || settings.Embedding.LMQueryPrefix != "Search: " || settings.Embedding.LMDocPrefix != "Document: " || settings.Embedding.LMThreshold == nil || *settings.Embedding.LMThreshold != 0.5 {
 		t.Fatalf("unexpected embedding config: %#v", settings.Embedding)
 	}
 }
@@ -224,6 +226,43 @@ func TestSearchHandlerReranksResultsWithEmbeddings(t *testing.T) {
 	}
 	if len(result.Results) != 2 || result.Results[0].Title != "Second" || result.Results[1].Title != "First" {
 		t.Fatalf("expected embedding-ranked results [Second First], got %#v", result.Results)
+	}
+}
+
+func TestRerankResultsFiltersEmbeddingDistanceAboveThreshold(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]},{"index":1,"embedding":[1,0]},{"index":2,"embedding":[0,1]}]}`))
+	}))
+	defer upstream.Close()
+
+	threshold := 0.5
+	results := []searchResult{
+		{Title: "Relevant", URL: "https://relevant.example/"},
+		{Title: "Unrelated", URL: "https://unrelated.example/"},
+	}
+	actual := rerankResults(context.Background(), newUpstreamClient(), embeddingSettings{
+		LMHost:      upstream.URL + "/embedding-model",
+		LMThreshold: &threshold,
+	}, "query", results)
+	if len(actual) != 1 || actual[0].Title != "Relevant" {
+		t.Fatalf("expected only the result within the embedding distance threshold, got %#v", actual)
+	}
+}
+
+func TestRerankResultsFiltersSingleEmbeddingAboveThreshold(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		_, _ = writer.Write([]byte(`{"data":[{"index":0,"embedding":[1,0]},{"index":1,"embedding":[0,1]}]}`))
+	}))
+	defer upstream.Close()
+
+	threshold := 0.5
+	results := []searchResult{{Title: "Unrelated", URL: "https://unrelated.example/"}}
+	actual := rerankResults(context.Background(), newUpstreamClient(), embeddingSettings{
+		LMHost:      upstream.URL + "/embedding-model",
+		LMThreshold: &threshold,
+	}, "query", results)
+	if len(actual) != 0 {
+		t.Fatalf("expected the single result to be filtered by embedding distance, got %#v", actual)
 	}
 }
 

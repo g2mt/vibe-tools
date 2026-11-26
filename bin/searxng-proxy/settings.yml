@@ -1,6 +1,8 @@
 embedding:
   lm_host: "http://10.0.2.100:9000/upstream/embedding-model"
   lm_query_prefix: "Search query: "
+  # Maximum cosine distance from the query embedding (0 to 2).
+  lm_threshold: 0.5
 
 engines:
   - name: local

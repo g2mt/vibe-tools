@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/url"
 	"strings"
 
@@ -35,9 +36,10 @@ func (value *scalarValue) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type embeddingSettings struct {
-	LMHost        string `yaml:"lm_host"`
-	LMQueryPrefix string `yaml:"lm_query_prefix"`
-	LMDocPrefix   string `yaml:"lm_doc_prefix"`
+	LMHost        string   `yaml:"lm_host"`
+	LMQueryPrefix string   `yaml:"lm_query_prefix"`
+	LMDocPrefix   string   `yaml:"lm_doc_prefix"`
+	LMThreshold   *float64 `yaml:"lm_threshold"`
 }
 
 type engineSettings struct {
@@ -108,6 +110,9 @@ func loadConfig(reader io.Reader) (engineSettings, error) {
 	settings := engines[0]
 	settings.Engines = engines
 	settings.Embedding = root.Embedding
+	if threshold := settings.Embedding.LMThreshold; threshold != nil && (math.IsNaN(*threshold) || math.IsInf(*threshold, 0) || *threshold < 0 || *threshold > 2) {
+		return engineSettings{}, errors.New("embedding lm_threshold must be between 0 and 2")
+	}
 	if host := strings.TrimSpace(settings.Embedding.LMHost); host != "" {
 		parsedURL, err := url.Parse(host)
 		if err != nil || (parsedURL.Scheme != "http" && parsedURL.Scheme != "https") || parsedURL.Host == "" || parsedURL.User != nil || parsedURL.RawQuery != "" || parsedURL.Fragment != "" {
